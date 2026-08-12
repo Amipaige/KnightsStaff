@@ -1,0 +1,32 @@
+name: Repair Knights app script
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Repair escaped newlines and logo path
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          # The previous build accidentally put a backslash immediately before
+          # a real newline inside JS strings/regexes, which makes the whole
+          # script fail to parse and leaves the login button dead.
+          s = s.replace('\\\n', '\\\\n')
+          s = s.replace('src="/KnightsStock/logo.svg"', 'src="logo.svg"')
+          p.write_text(s, encoding='utf-8')
+          PY
+      - name: Commit repaired index
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet || git commit -m 'Repair broken app script and logo path'
+          git push
