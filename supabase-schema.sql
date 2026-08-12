@@ -9,8 +9,12 @@ create table if not exists public.stock_products (
   low_stock_level integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (lower(name))
+  unique (name)
 );
+
+-- Case-insensitive product names are enforced by this unique index.
+create unique index if not exists stock_products_name_lower_idx
+  on public.stock_products (lower(name));
 
 create table if not exists public.stock_receipts (
   id uuid primary key default gen_random_uuid(),
