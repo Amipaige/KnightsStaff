@@ -1,0 +1,35 @@
+name: Improve Knights login diagnostics
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-login-reason.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update login diagnostics
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text()
+          old = "async function login(){const entered=$('pw').value.trim();if((await sha(entered))===HASH||(await sha(entered))==='a1e44f91fe54575584997436f5740416b05ffd69f1d30d9c71d7373454ce6f3e'){sessionStorage.k='1';$('login').style.display='none';$('app').style.display='block';load()}else $('loginErr').textContent='Incorrect password.'}"
+          new = "async function login(){const msg=$('loginErr');msg.textContent='';const raw=$('pw').value;if(!raw){msg.textContent='Login failed: no password was entered.';return}if(!window.crypto||!crypto.subtle){msg.textContent='Login failed: your browser cannot run the secure password check. Please update your browser.';return}try{const entered=raw.trim(),hash=await sha(entered);if(hash===HASH||hash==='a1e44f91fe54575584997436f5740416b05ffd69f1d30d9c71d7373454ce6f3e'){sessionStorage.k='1';$('login').style.display='none';$('app').style.display='block';load()}else{msg.textContent='Login failed: the password entered does not match. Check capital letters, numbers and punctuation. If you are sure it is correct, refresh the page to load the latest version.'}}catch(e){msg.textContent='Login failed: the password check could not run. Please refresh the page and try again.'}}"
+          if old not in s:
+              raise SystemExit('Expected login code was not found; no change made.')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Commit login diagnostics
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet || git commit -m 'Improve login failure reason'
+          git push
