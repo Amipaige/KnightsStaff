@@ -1,0 +1,30 @@
+name: Use supplied Knights logo
+on:
+  push:
+    paths:
+      - '.github/workflows/use-supplied-logo.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Switch login logo
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          s=s.replace('src="/KnightsStock/logo.svg" alt="Knights Mobile Bars logo"','src="logo-exact.svg?v=5" alt="Knights Mobile Bars logo"',1)
+          s=s.replace('src="logo.svg?v=4" alt="Knights Mobile Bars logo"','src="logo-exact.svg?v=5" alt="Knights Mobile Bars logo"',1)
+          p.write_text(s)
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet || git commit -m 'Use supplied Knights logo'
+          git push
