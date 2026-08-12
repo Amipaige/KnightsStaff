@@ -1,113 +1,24 @@
-// Live fixes for the shared Supabase stock database.
+// Knights Stock Control - live database + invoice fixes
 (function () {
-  const URL = 'https://jpjrsndbjklecvwiuvbf.supabase.co/rest/v1/products?select=*&order=name';
-  const KEY = 'sb_publishable_3xafRje7lv0WNnV1wkdU4Q_Yo3NYrW7';
-  const $ = id => document.getElementById(id);
-  const esc = s => String(s ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
-  let liveProducts = [];
-
-  function installHeaderLogo() {
-    const header = document.querySelector('.header');
-    if (!header) return;
-    if (header.querySelector('.live-brand-logo')) return;
-    const brand = header.querySelector('.brand');
-    const small = header.querySelector('.small');
-    const img = document.createElement('img');
-    img.className = 'live-brand-logo';
-    img.src = 'logo-exact.svg?v=9';
-    img.alt = 'Knights Mobile Bars';
-    img.onerror = function () { this.style.display = 'none'; };
-    header.insertBefore(img, brand);
-    const style = document.createElement('style');
-    style.textContent = '.live-brand-logo{display:block;width:125px;height:125px;object-fit:contain;margin:0 auto 8px;background:#fff;border-radius:10px;padding:6px}.header{text-align:center}.header .brand{font-size:24px}.header .small{margin-top:3px}';
-    document.head.appendChild(style);
-  }
-
-  async function fetchProducts() {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
-    try {
-      const r = await fetch(URL, {headers:{apikey:KEY,Authorization:'Bearer '+KEY},cache:'no-store',signal:controller.signal});
-      const text = await r.text();
-      let data; try { data = JSON.parse(text); } catch (_) { data = null; }
-      if (!r.ok) throw new Error(data?.message || data?.hint || ('HTTP '+r.status));
-      if (!Array.isArray(data)) throw new Error('Unexpected response from stock database.');
-      return data;
-    } finally { clearTimeout(timer); }
-  }
-
-  function renderLive() {
-    const received = liveProducts.reduce((a,p)=>a+Number(p.stock_received||0),0);
-    const sold = liveProducts.reduce((a,p)=>a+Number(p.stock_sold||0),0);
-    if ($('received')) $('received').textContent = received;
-    if ($('sold')) $('sold').textContent = sold;
-    if ($('expected')) $('expected').textContent = received-sold;
-    if ($('count')) $('count').textContent = liveProducts.length;
-    const rows = $('rows');
-    if (!rows) return;
-    rows.innerHTML = liveProducts.length ? liveProducts.map(p => {
-      const received=Number(p.stock_received||0), sold=Number(p.stock_sold||0), physical=p.physical_stock;
-      return `<tr><td>${esc(p.name)}</td><td>${received}</td><td><input class="live-sold" data-id="${esc(p.id)}" type="number" min="0" value="${sold}" style="width:75px"></td><td>${received-sold}</td><td><button class="secondary live-save" data-id="${esc(p.id)}">Save</button></td></tr>`;
-    }).join('') : '<tr><td colspan="5">No stock yet.</td></tr>';
-    rows.onclick = async e => {
-      if (!e.target.classList.contains('live-save')) return;
-      const id=e.target.dataset.id, input=rows.querySelector(`.live-sold[data-id="${id}"]`), value=Math.max(0,Number(input.value)||0);
-      e.target.disabled=true;
-      try {
-        const r=await fetch('https://jpjrsndbjklecvwiuvbf.supabase.co/rest/v1/products?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({stock_sold:value})});
-        if(!r.ok) throw new Error(await r.text());
-        await window.liveLoad();
-      } catch(err){ alert('Could not save stock: '+err.message); e.target.disabled=false; }
-    };
-  }
-
-  window.liveLoad = async function () {
-    installHeaderLogo();
-    const status=$('connection');
-    if(status) status.textContent='Connecting to shared stock…';
-    try {
-      liveProducts=await fetchProducts();
-      window.products=liveProducts;
-      if(status) status.textContent='✓ Shared stock connected ('+liveProducts.length+' products)';
-      renderLive();
-    } catch(err) {
-      if(status) status.textContent='Database connection failed: '+(err.name==='AbortError'?'request timed out after 10 seconds':err.message);
-      console.error('KnightsStock database error',err);
-    }
-  };
-
-  function replaceAddStockConfirm() {
-    const old = $('confirm');
-    if(!old || old.dataset.liveFixed) return;
-    old.dataset.liveFixed='1';
-    old.onclick=async function(){
-      if(!window.pending || !window.pending.length){ alert('No stock lines to add.'); return; }
-      for(const x of window.pending){ if(x.type==='spirit'&&!x.bottleMl){alert('Enter bottle size for '+x.name);return;} }
-      old.disabled=true;
-      try {
-        for(const x of window.pending){
-          const units=Number(x.units)||0; if(!units) continue;
-          const name=String(x.name).trim();
-          const existing=liveProducts.find(p=>String(p.name||'').trim().toLowerCase()===name.toLowerCase());
-          if(existing){
-            const r=await fetch('https://jpjrsndbjklecvwiuvbf.supabase.co/rest/v1/products?id=eq.'+encodeURIComponent(existing.id),{method:'PATCH',headers:{apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({stock_received:Number(existing.stock_received||0)+units})});
-            if(!r.ok) throw new Error(await r.text());
-          } else {
-            const r=await fetch('https://jpjrsndbjklecvwiuvbf.supabase.co/rest/v1/products',{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({name,category:x.type==='spirit'?'Spirits':'Other',unit:x.type==='spirit'?'shots':'unit',stock_received:units,stock_sold:0,physical_stock:units,low_stock_level:0})});
-            if(!r.ok) throw new Error(await r.text());
-          }
-        }
-        $('modal').style.display='none'; $('status').textContent='✓ Stock added successfully.'; window.pending=[]; await window.liveLoad();
-      } catch(err){ alert('Could not add stock: '+err.message); } finally { old.disabled=false; }
-    };
-  }
-
-  function start() {
-    installHeaderLogo();
-    replaceAddStockConfirm();
-    window.load = window.liveLoad;
-    const app=$('app');
-    if(app && app.style.display!=='none' && sessionStorage.getItem('k')==='1') window.liveLoad();
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start); else start();
+  const BASE='https://jpjrsndbjklecvwiuvbf.supabase.co/rest/v1/stock_products';
+  const KEY='sb_publishable_3xafRje7lv0WNnV1wkdU4Q_Yo3NYrW7';
+  const MEASURE=25;
+  const $=id=>document.getElementById(id);
+  const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
+  let liveProducts=[];
+  let livePending=[];
+  function installLogo(){const header=$('.header');if(!header||header.querySelector('.live-brand-logo'))return;const img=document.createElement('img');img.className='live-brand-logo';img.src='logo-exact.svg?v=12';img.alt='Knights Mobile Bars';const brand=header.querySelector('.brand');header.insertBefore(img,brand);const st=document.createElement('style');st.textContent='.live-brand-logo{display:block;width:170px;height:170px;object-fit:contain;margin:0 auto 2px}.header{text-align:center}.header .brand{display:none}.header .small{margin-top:0}';document.head.appendChild(st)}
+  async function api(url,opts={}){const r=await fetch(url,{...opts,headers:{apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':'application/json',...(opts.headers||{})},cache:'no-store'});const t=await r.text();let d;try{d=JSON.parse(t)}catch{d=t}if(!r.ok)throw new Error(d?.message||d?.hint||d||('HTTP '+r.status));return d}
+  async function loadProducts(){return api(BASE+'?select=*&order=name')}
+  function render(){const received=liveProducts.reduce((a,p)=>a+Number(p.received||0),0),sold=liveProducts.reduce((a,p)=>a+Number(p.sold||0),0);if($('received'))$('received').textContent=received;if($('sold'))$('sold').textContent=sold;if($('expected'))$('expected').textContent=received-sold;if($('count'))$('count').textContent=liveProducts.length;const rows=$('rows');if(!rows)return;rows.innerHTML=liveProducts.length?liveProducts.map(p=>{const r=Number(p.received||0),s=Number(p.sold||0);return `<tr><td>${esc(p.name)}</td><td>${r}</td><td><input class="live-sold" data-id="${esc(p.id)}" type="number" min="0" value="${s}" style="width:75px"></td><td>${r-s}</td><td><button class="secondary live-save" data-id="${esc(p.id)}">Save</button></td></tr>`}).join(''):'<tr><td colspan="5">No stock yet.</td></tr>';rows.onclick=async e=>{if(!e.target.classList.contains('live-save'))return;const id=e.target.dataset.id,v=Math.max(0,Number(rows.querySelector(`.live-sold[data-id="${id}"]`).value)||0);e.target.disabled=true;try{await api(BASE+'?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({sold:v})});await liveLoad()}catch(err){alert('Could not save stock: '+err.message);e.target.disabled=false}}}
+  window.liveLoad=async function(){installLogo();const status=$('connection');if(status)status.textContent='Connecting to shared stock…';try{liveProducts=await loadProducts();window.products=liveProducts;if(status)status.textContent='✓ Shared stock connected ('+liveProducts.length+' products)';render()}catch(err){if(status)status.textContent='Database connection failed: '+err.message;console.error(err)}};
+  function isSpirit(s){return /\b(gin|vodka|whisk(?:y|e)y|rum|brandy|cognac|tequila|mezcal|liqueur|disaronno|baileys|amaretto|sambuca|malibu|jack daniel|jameson|smirnoff|gordon'?s|bacardi|captain morgan|absolut|bombay|tanqueray|hendrick|grey goose|ketel one)\b/i.test(s)}
+  function sizeMl(s){let m=String(s).match(/(\d+(?:\.\d+)?)\s*(ml|cl)\b/i);if(m)return Math.round(Number(m[1])*(m[2].toLowerCase()==='cl'?10:1));m=String(s).match(/(\d+(?:\.\d+)?)\s*(litre|liter|l)\b/i);return m?Math.round(Number(m[1])*1000):null}
+  function genericInvoice(text){const out=[];const lines=String(text).replace(/\u00a0/g,' ').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);for(let i=0;i<lines.length;i++){const line=lines[i];if(/^(subtotal|total|saving|promotion|discount|vat|invoice|receipt|payment|balance|account|date|delivery|customer|supplier|page\b)/i.test(line)||!/£\s*\d/.test(line))continue;let q=1,name='';let m=line.match(/^(\d{1,4})\s+(.*?)\s+£\s*\d+(?:\.\d{1,2})?/);if(m){q=Number(m[1]);name=m[2]}else{m=line.match(/^(.*?)\s+(?:£\s*\d+(?:\.\d{1,2})?)\s+(\d{1,4})$/);if(m){name=m[1];q=Number(m[2])}}if(!name)continue;name=name.replace(/\s+/g,' ').trim();const full=name+' '+lines.slice(i+1,i+3).join(' ');if(isSpirit(full)){const ml=sizeMl(full);out.push({name:name.replace(/\b\d+(?:\.\d+)?\s*(?:ml|cl|l|litre|liter)\b/ig,'').trim(),type:'spirit',qty:q,bottleMl:ml,units:ml?Math.round(ml/MEASURE*q):0,sizeText:ml?ml+'ml bottle':'SIZE REQUIRED'})}else{const pm=full.match(/(\d+)\s*[x×]/i),pack=pm?Number(pm[1]):1;out.push({name,type:'unit',qty:q,units:q*pack,sizeText:pack>1?'pack '+pack:'unit'})}}return out}
+  async function pdfOcr(file){const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer()),disableWorker:true}).promise;let out='';for(let n=1;n<=Math.min(pdf.numPages,6);n++){const page=await pdf.getPage(n),vp=page.getViewport({scale:1.7}),c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;const r=await Tesseract.recognize(c,'eng');out+='\n'+r.data.text}return out}
+  function showReview(items,fileName,supplier){livePending=items;const modal=$('modal');$('supplier').textContent=(supplier||'Invoice / receipt')+' · '+fileName;$('reviewMsg').textContent=items.length?items.length+' stock lines found. Check the quantities before confirming.':'I could not confidently identify stock lines. Try a clearer PDF/photo.';$('reviewWarning').innerHTML=items.some(x=>x.type==='spirit'&&!x.bottleMl)?'<div class="warning">A spirit bottle size is missing. Enter the bottle size in ml before confirming.</div>':'';$('detected').innerHTML=items.map((x,i)=>`<tr><td><input class="live-nm" data-i="${i}" value="${esc(x.name)}"></td><td><span class="tag ${x.type==='spirit'?'spirit':''}">${x.type.toUpperCase()}</span></td><td><input class="live-qt" data-i="${i}" type="number" min="0" value="${x.qty}" style="width:65px"></td><td>${x.type==='spirit'?`<input class="live-sz" data-i="${i}" type="number" min="1" value="${x.bottleMl||''}" placeholder="ml" style="width:85px"> ml bottle`:esc(x.sizeText||'unit')}</td><td class="live-u" data-i="${i}">${x.type==='spirit'?(x.units?x.units+' shots':'SIZE REQUIRED'):(x.units+' units')}</td></tr>`).join('');$('detected').oninput=e=>{const i=Number(e.target.dataset.i),x=livePending[i];if(!x)return;if(e.target.classList.contains('live-nm'))x.name=e.target.value;if(e.target.classList.contains('live-qt'))x.qty=Number(e.target.value)||0;if(e.target.classList.contains('live-sz'))x.bottleMl=Number(e.target.value)||0;if(x.type==='spirit'){x.units=x.bottleMl?Math.round(x.bottleMl/MEASURE*x.qty):0;const u=document.querySelector(`.live-u[data-i="${i}"]`);if(u)u.textContent=x.units?x.units+' shots':'SIZE REQUIRED'}};modal.style.display='flex'}
+  function hookUpload(){const input=$('file');if(!input||input.dataset.liveUpload)return;input.dataset.liveUpload='1';input.onchange=async()=>{const f=input.files[0];if(!f)return;$('status').textContent='Reading '+f.name+'…';try{let text=(f.type==='application/pdf'||/\.pdf$/i.test(f.name))?await window.pdfText(f):await window.imageText(f);let parsed=window.parse?window.parse(text):{supplier:'Invoice / receipt',items:[]};let items=parsed.items||[];if(!items.length){$('status').textContent='Invoice text not recognised — scanning the document…';text=(f.type==='application/pdf'||/\.pdf$/i.test(f.name))?await pdfOcr(f):await window.imageText(f);items=genericInvoice(text)}showReview(items,f.name,parsed.supplier||'Invoice / receipt')}catch(err){$('status').textContent='Could not read this file: '+err.message;alert('Could not read the invoice. Please try the PDF again or upload a clear photo.')}}}
+  function hookConfirm(){const b=$('confirm');if(!b||b.dataset.liveConfirm)return;b.dataset.liveConfirm='1';b.onclick=async()=>{if(!livePending.length){alert('No stock lines were found in this invoice.');return}for(const x of livePending)if(x.type==='spirit'&&!x.bottleMl){alert('Enter bottle size for '+x.name);return}b.disabled=true;try{for(const x of livePending){const units=Number(x.units)||0;if(!units)continue;const name=String(x.name).trim(),ex=liveProducts.find(p=>String(p.name||'').trim().toLowerCase()===name.toLowerCase());if(ex)await api(BASE+'?id=eq.'+encodeURIComponent(ex.id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({received:Number(ex.received||0)+units})});else await api(BASE,{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({name,received:units,sold:0,low_stock_level:0})})}$('modal').style.display='none';$('status').textContent='✓ Stock added successfully.';livePending=[];await liveLoad()}catch(err){alert('Could not add stock: '+err.message)}finally{b.disabled=false}}}
+  function start(){installLogo();hookUpload();hookConfirm();window.load=window.liveLoad;const app=$('app');if(app&&app.style.display!=='none'&&sessionStorage.getItem('k')==='1')window.liveLoad()}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
 })();
