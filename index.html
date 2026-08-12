@@ -5,129 +5,53 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Knights Stock Control</title>
 <meta name="theme-color" content="#111">
-<link rel="icon" type="image/svg+xml" href="./favicon.svg">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#f5f2ed;color:#171717;font-family:Arial,sans-serif}.app{max-width:820px;margin:auto;padding:14px}.header{background:#111;color:#fff;border-radius:18px;padding:18px;margin-bottom:12px}.brand{font:28px Georgia,serif}.small{opacity:.7;font-size:12px;margin-top:5px}.nav{display:flex;gap:8px;overflow:auto;margin:12px 0}.nav button{border:0;background:#fff;padding:11px 15px;border-radius:12px;font-weight:700;white-space:nowrap}.nav button.active{background:#111;color:#fff}section.hidden{display:none}h2{font:27px Georgia,serif;margin:18px 0 5px}.muted{color:#777}.cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:15px 0}.card,.panel{background:#fff;border:1px solid #e2ddd5;border-radius:16px;padding:17px}.label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#777}.value{font-size:31px;font-weight:800;margin-top:7px}.upload,.primary,.secondary{border-radius:11px;padding:12px 16px;font-weight:700;cursor:pointer}.upload{display:block;background:#111;color:#fff;text-align:center;margin-top:12px}.primary{background:#111;color:#fff;border:0}.secondary{background:#fff;color:#111;border:1px solid #ccc}input[type=file]{display:none}input[type=text],input[type=number],input[type=password]{width:100%;padding:10px;border:1px solid #ddd;border-radius:10px;font-size:15px}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{padding:9px 5px;border-bottom:1px solid #eee;text-align:left;font-size:13px}th{font-size:11px;text-transform:uppercase;color:#777}.notice{background:#fff7df;border:1px solid #ead8a1;padding:12px;border-radius:12px;font-size:13px;margin-top:12px}.status{margin-top:10px;font-size:13px}.login{position:fixed;inset:0;background:#f5f2ed;display:flex;align-items:center;justify-content:center;padding:20px;z-index:10}.login-box{width:100%;max-width:390px;background:#fff;border-radius:20px;padding:28px;text-align:center}.login-logo{font:30px Georgia,serif}.error{color:#b6403b;min-height:20px;margin-top:10px}.modal{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;padding:14px;z-index:20}.modal-box{background:#f5f2ed;border-radius:18px;max-width:820px;width:100%;max-height:90vh;overflow:auto;padding:18px}.actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}.progress{height:8px;background:#ddd;border-radius:9px;overflow:hidden;margin-top:10px}.progress i{display:block;height:100%;width:0;background:#111}.tag{display:inline-block;padding:4px 7px;border-radius:8px;background:#eee;font-size:11px;font-weight:700}.spirit{background:#efe6d6}@media(max-width:600px){.cards{grid-template-columns:1fr}.actions{flex-direction:column}.brand{font-size:24px}}
+*{box-sizing:border-box}body{margin:0;background:#f5f2ed;color:#171717;font-family:Arial,sans-serif}.app{max-width:900px;margin:auto;padding:14px}.header{background:#111;color:#fff;border-radius:18px;padding:18px;margin-bottom:12px}.brand{font:28px Georgia,serif}.small{opacity:.7;font-size:12px;margin-top:5px}.nav{display:flex;gap:8px;overflow:auto;margin:12px 0}.nav button{border:0;background:#fff;padding:11px 15px;border-radius:12px;font-weight:700;white-space:nowrap;cursor:pointer}.nav button.active{background:#111;color:#fff}section.hidden{display:none}h2{font:27px Georgia,serif;margin:18px 0 5px}.muted{color:#777}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:15px 0}.card,.panel{background:#fff;border:1px solid #e2ddd5;border-radius:16px;padding:17px}.label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#777}.value{font-size:31px;font-weight:800;margin-top:7px}.upload,.primary,.secondary{border-radius:11px;padding:12px 16px;font-weight:700;cursor:pointer}.upload{display:block;background:#111;color:#fff;text-align:center;margin-top:12px}.primary{background:#111;color:#fff;border:0}.secondary{background:#fff;color:#111;border:1px solid #ccc}input[type=file]{display:none}input[type=text],input[type=number],input[type=password],select{width:100%;padding:10px;border:1px solid #ddd;border-radius:10px;font-size:15px}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{padding:9px 5px;border-bottom:1px solid #eee;text-align:left;font-size:13px}th{font-size:11px;text-transform:uppercase;color:#777}.notice{background:#fff7df;border:1px solid #ead8a1;padding:12px;border-radius:12px;font-size:13px;margin-top:12px}.status{margin-top:10px;font-size:13px}.login{position:fixed;inset:0;background:#f5f2ed;display:flex;align-items:center;justify-content:center;padding:20px;z-index:10}.login-box{width:100%;max-width:390px;background:#fff;border-radius:20px;padding:28px;text-align:center}.login-logo{font:30px Georgia,serif}.error{color:#b6403b;min-height:20px;margin-top:10px}.modal{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;padding:14px;z-index:20}.modal-box{background:#f5f2ed;border-radius:18px;max-width:900px;width:100%;max-height:90vh;overflow:auto;padding:18px}.actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}.progress{height:8px;background:#ddd;border-radius:9px;overflow:hidden;margin-top:10px}.progress i{display:block;height:100%;width:0;background:#111}.tag{display:inline-block;padding:4px 7px;border-radius:8px;background:#eee;font-size:11px;font-weight:700}.spirit{background:#efe6d6}.warning{background:#fff0ed;border:1px solid #e5b4aa;padding:10px;border-radius:10px;margin-top:10px}.ok{background:#edf7ed;border:1px solid #b9d8b9;padding:10px;border-radius:10px;margin-top:10px}@media(max-width:700px){.cards{grid-template-columns:1fr 1fr}.actions{flex-direction:column}.brand{font-size:24px}}
 </style>
 </head>
 <body>
 <div id="login" class="login"><div class="login-box"><div class="login-logo">Knights Mobile Bars</div><p class="muted">STOCK CONTROL</p><input id="pw" type="password" placeholder="Password"><button class="primary" style="width:100%;margin-top:10px" id="loginBtn">Log in</button><div id="loginErr" class="error"></div></div></div>
 <div id="app" class="app" style="display:none">
 <header class="header"><div class="brand">Knights Mobile Bars</div><div class="small">STOCK CONTROL · SHARED</div></header>
-<nav class="nav"><button class="active" data-tab="dashboard">Dashboard</button><button data-tab="stock">Stock</button><button data-tab="add">Add Stock</button></nav>
+<nav class="nav"><button class="active" data-tab="dashboard">Dashboard</button><button data-tab="stock">Stock</button><button data-tab="add">Add Stock</button><button data-tab="take">Stock Take</button><button data-tab="events">Events</button></nav>
 <section id="dashboard"><h2>Stock at a glance</h2><p class="muted">Shared stock available on your phone, tablet and computer.</p><div class="cards"><div class="card"><div class="label">Stock received</div><div id="received" class="value">0</div><div class="muted">stock units / shots</div></div><div class="card"><div class="label">Sold</div><div id="sold" class="value">0</div><div class="muted">stock units / shots</div></div><div class="card"><div class="label">Expected</div><div id="expected" class="value">0</div><div class="muted">remaining</div></div><div class="card"><div class="label">Products</div><div id="count" class="value">0</div><div class="muted">products</div></div></div><div class="panel"><b id="connection">Connecting…</b></div></section>
-<section id="stock" class="hidden"><h2>Stock</h2><div class="panel table-wrap"><table><thead><tr><th>Product</th><th>Received</th><th>Sold</th><th>Expected</th></tr></thead><tbody id="rows"></tbody></table></div></section>
-<section id="add" class="hidden"><h2>Add Stock</h2><p class="muted">Upload a receipt or invoice. PDF files and photos are supported.</p><div class="panel"><label class="upload">📷 Upload receipt / invoice<input id="file" type="file" accept=".pdf,application/pdf,.jpg,.jpeg,.png,.webp,.heic,image/*"></label><div id="status" class="status muted">No file selected.</div><div id="progress" class="progress" style="display:none"><i id="bar"></i></div><div class="notice">Spirits use <b>25ml measures</b>. For example, a 1L bottle is counted as <b>40 shots</b>. Nothing is added until you review and press <b>Confirm Stock In</b>.</div></div></section>
+<section id="stock" class="hidden"><h2>Stock</h2><div class="panel table-wrap"><table><thead><tr><th>Product</th><th>Received</th><th>Sold</th><th>Expected</th><th></th></tr></thead><tbody id="rows"></tbody></table></div></section>
+<section id="add" class="hidden"><h2>Add Stock</h2><p class="muted">Upload a receipt or invoice. PDF files and photos are supported.</p><div class="panel"><label class="upload">📷 Upload receipt / invoice<input id="file" type="file" accept=".pdf,application/pdf,.jpg,.jpeg,.png,.webp,.heic,image/*"></label><div id="status" class="status muted">No file selected.</div><div id="progress" class="progress" style="display:none"><i id="bar"></i></div><div class="notice">Spirits use <b>25ml measures</b>. A 1L bottle is 40 shots and a 500ml bottle is 20 shots. The app will not guess a missing spirit size.</div></div></section>
+<section id="take" class="hidden"><h2>Stock Take</h2><div class="panel"><p class="muted">Use this area for physical stock counts. The detailed stock-take workflow can be added next.</p></div></section>
+<section id="events" class="hidden"><h2>Events</h2><div class="panel"><p class="muted">Event-by-event stock tracking can be added here next.</p></div></section>
 </div>
-<div id="modal" class="modal"><div class="modal-box"><h2 style="margin-top:0">Review stock received</h2><div id="supplier" class="muted"></div><div id="reviewMsg" class="status"></div><div class="panel table-wrap"><table><thead><tr><th>Product</th><th>Type</th><th>Qty</th><th>Size / pack</th><th>Stock</th></tr></thead><tbody id="detected"></tbody></table></div><div class="actions"><button class="secondary" id="cancel">Cancel</button><button class="primary" id="confirm">Confirm Stock In</button></div></div></div>
+<div id="modal" class="modal"><div class="modal-box"><h2 style="margin-top:0">Review stock received</h2><div id="supplier" class="muted"></div><div id="reviewMsg" class="status"></div><div id="reviewWarning"></div><div class="panel table-wrap"><table><thead><tr><th>Product</th><th>Type</th><th>Qty</th><th>Size / pack</th><th>Stock</th></tr></thead><tbody id="detected"></tbody></table></div><div class="actions"><button class="secondary" id="cancel">Cancel</button><button class="primary" id="confirm">Confirm Stock In</button></div></div></div>
 <script>
 const SUPABASE_URL='https://jpjrsndbjklecvwiuvbf.supabase.co';
 const SUPABASE_KEY='sb_publishable_3xafRje7lv0WNnV1wkdU4Q_Yo3NYrW7';
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const PASSWORD_HASH='59ee58a08f15abe3c316177cf952fa86ad7ad3d4512cd89eddbb2d013fd4e8b6';
-const MEASURE_ML=25;
-let products=[],pending=[];
-const $=id=>document.getElementById(id);
+const MEASURE_ML=25;let products=[],pending=[];const $=id=>document.getElementById(id);
 async function sha(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
 async function login(){if(await sha($('pw').value)===PASSWORD_HASH){sessionStorage.k='1';show()}else $('loginErr').textContent='Incorrect password.'}
 function show(){$('login').style.display='none';$('app').style.display='block';load()}
 $('loginBtn').onclick=login;$('pw').onkeydown=e=>{if(e.key==='Enter')login()};
-document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('section').forEach(s=>s.classList.add('hidden'));$(b.dataset.tab).classList.remove('hidden')});
+if(sessionStorage.k==='1')show();
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('#app section').forEach(s=>s.classList.add('hidden'));$(b.dataset.tab).classList.remove('hidden')});
 async function load(){const r=await db.from('stock_products').select('*').order('name');if(r.error){$('connection').textContent='Database error: '+r.error.message;return}products=r.data||[];$('connection').textContent='✓ Shared stock connected';render()}
-function render(){const rec=products.reduce((a,p)=>a+Number(p.received||0),0),sold=products.reduce((a,p)=>a+Number(p.sold||0),0);$('received').textContent=rec;$('sold').textContent=sold;$('expected').textContent=rec-sold;$('count').textContent=products.length;$('rows').innerHTML=products.length?products.map(p=>`<tr><td>${esc(p.name)}</td><td>${p.received||0}</td><td>${p.sold||0}</td><td><b>${Number(p.received||0)-Number(p.sold||0)}</b></td></tr>`).join(''):'<tr><td colspan="4">No stock yet.</td></tr>'}
+function render(){const rec=products.reduce((a,p)=>a+Number(p.received||0),0),sold=products.reduce((a,p)=>a+Number(p.sold||0),0);$('received').textContent=rec;$('sold').textContent=sold;$('expected').textContent=rec-sold;$('count').textContent=products.length;$('rows').innerHTML=products.length?products.map(p=>`<tr><td>${esc(p.name)}</td><td>${p.received||0}</td><td><input class="sold" data-id="${p.id}" type="number" min="0" value="${p.sold||0}" style="width:80px"></td><td><b>${Number(p.received||0)-Number(p.sold||0)}</b></td><td><button class="secondary saveSold" data-id="${p.id}">Save</button></td></tr>`).join(''):'<tr><td colspan="5">No stock yet.</td></tr>'}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
-async function pdfText(file){
-  // Run PDF.js without a web worker. This avoids the workerSrc error on GitHub Pages.
-  const data=new Uint8Array(await file.arrayBuffer());
-  const pdf=await pdfjsLib.getDocument({data,disableWorker:true}).promise;
-  let out='';
-  for(let i=1;i<=pdf.numPages;i++){
-    const page=await pdf.getPage(i);
-    const c=await page.getTextContent();
-    out+=c.items.map(x=>x.str).join(' ')+'\n';
-  }
-  return out;
-}
+$('rows').onclick=async e=>{if(!e.target.classList.contains('saveSold'))return;const id=e.target.dataset.id,input=document.querySelector(`.sold[data-id="${id}"]`),sold=Math.max(0,Number(input.value)||0);const r=await db.from('stock_products').update({sold}).eq('id',id);if(r.error){alert('Could not save: '+r.error.message);return}await load()};
+async function pdfText(file){const data=new Uint8Array(await file.arrayBuffer());const pdf=await pdfjsLib.getDocument({data,disableWorker:true}).promise;let out='';for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i);const c=await page.getTextContent();const items=c.items.filter(x=>x.str&&x.str.trim()).map(x=>({t:x.str.trim(),x:x.transform[4],y:Math.round(x.transform[5])}));const groups=[];for(const it of items){let g=groups.find(z=>Math.abs(z.y-it.y)<=2);if(!g){g={y:it.y,a:[]};groups.push(g)}g.a.push(it)}groups.sort((a,b)=>b.y-a.y);out+=groups.map(g=>g.a.sort((a,b)=>a.x-b.x).map(x=>x.t).join(' ')).join('\n')+'\n'}return out}
 async function imageText(file){$('progress').style.display='block';$('bar').style.width='5%';const r=await Tesseract.recognize(file,'eng',{logger:m=>{if(m.status==='recognizing text')$('bar').style.width=Math.round((m.progress||0)*100)+'%'}});$('progress').style.display='none';return r.data.text}
 function isSpirit(s){return /\b(gin|vodka|whisk(?:y|e)y|whisky|rum|brandy|cognac|armagnac|tequila|mezcal|liqueur|disaronno|baileys|jagermeister|j[aä]ger|amaretto|sambuca|malibu|jack daniel|jameson|smirnoff|gordon'?s|bacardi|captain morgan|absolut|bombay|tanqueray|hendrick|grey goose|ketel one)\b/i.test(s)}
-function bottleMl(s){const m=s.match(/(\d+(?:\.\d+)?)\s*(ml|cl|litre|liter|l)\b/i);if(!m)return null;let n=Number(m[1]);const u=m[2].toLowerCase();if(u==='l'||u==='litre'||u==='liter')n*=1000;else if(u==='cl')n*=10;return Math.round(n)}
+function bottleMl(s){let m=s.match(/(\d+(?:\.\d+)?)\s*(ml|cl)\b/i);if(m)return Math.round(Number(m[1])*(m[2].toLowerCase()==='cl'?10:1));m=s.match(/(\d+(?:\.\d+)?)\s*(litre|liter|l)\b/i);if(m)return Math.round(Number(m[1])*1000);return null}
 function cleanName(s){return s.replace(/\s+/g,' ').replace(/\bCc\b.*$/i,'').replace(/£\s*\d+(?:\.\d{1,2})?/g,'').trim()}
 function cleanSpiritName(s){return s.replace(/\b(distilled|spirit|bottle|vol|volume)\b/gi,'').replace(/\d+(?:\.\d+)?\s*(?:ml|cl|l|litre|liter)\b/gi,'').replace(/\s+/g,' ').trim()}
-function parse(text){
-  const supplier=/booker/i.test(text)?'Booker':/lwc/i.test(text)?'LWC':/tesco/i.test(text)?'Tesco':'Receipt / invoice';
-  const raw=text.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-  const items=[];
-  for(let i=0;i<raw.length;i++){
-    const line=raw[i].replace(/\s+/g,' ');
-    const m=line.match(/^(\d{1,3})\s+(.+?)\s+£\s*\d+(?:\.\d{1,2})?/);
-    if(!m)continue;
-    const qty=Number(m[1]);
-    let name=cleanName(m[2]);
-    let extra='';
-    for(let j=i+1;j<Math.min(i+4,raw.length);j++){
-      const n=raw[j].replace(/\s+/g,' ');
-      if(/^\d{1,3}\s+.+?\s+£\s*\d/i.test(n)||/^(subtotal|total|saving|promotion|clubcard|card|mastercard|visa|amex|points|authorisation|merchant)/i.test(n))break;
-      if(/^cc\b/i.test(n)||/£/.test(n))continue;
-      extra+=' '+n;
-    }
-    const full=(name+' '+extra).trim();
-    if(/subtotal|total|saving|promotion|vat|card|points/i.test(full))continue;
-    const spirit=isSpirit(full);
-    const size=bottleMl(full);
-    if(spirit){
-      const ml=size||1000;
-      items.push({name:cleanSpiritName(name),type:'spirit',qty,bottleMl:ml,units:Math.round((ml/MEASURE_ML)*qty)});
-    }else{
-      let pack=1;
-      const px=full.match(/(\d+)\s*(?:x|×)\s*(?:\d+(?:\.\d+)?\s*)?(?:ml|cl|l|litre|liter)?/i);
-      if(px)pack=Number(px[1]);
-      items.push({name:cleanName(name),type:'unit',qty,pack,units:qty*pack});
-    }
-  }
-  return{supplier,items};
-}
-$('file').onchange=async e=>{
-  const f=e.target.files[0];if(!f)return;
-  $('status').textContent='Reading '+f.name+'…';
-  try{
-    const isPdf=f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf');
-    const text=isPdf?await pdfText(f):await imageText(f);
-    const r=parse(text);pending=r.items;
-    $('supplier').textContent=r.supplier+' · '+f.name;
-    $('reviewMsg').textContent=pending.length?pending.length+' stock line(s) found. Spirits are converted to 25ml measures. Check everything before saving.':'I could not confidently identify any stock lines. Try a clearer photo or PDF.';
-    $('detected').innerHTML=pending.map((x,i)=>`<tr><td><input class="nm" data-i="${i}" value="${esc(x.name)}"></td><td><span class="tag ${x.type==='spirit'?'spirit':''}">${x.type==='spirit'?'SPIRIT':'UNIT'}</span></td><td><input class="qt" data-i="${i}" type="number" min="0" value="${x.qty}" style="width:70px"></td><td>${x.type==='spirit'?esc(x.bottleMl+'ml bottle'):'pack '+x.pack}</td><td class="units" data-i="${i}">${x.units} ${x.type==='spirit'?'shots':'units'}</td></tr>`).join('');
-    $('modal').style.display='flex';
-  }catch(err){$('progress').style.display='none';$('status').textContent='Could not read the file: '+err.message}
-};
-$('detected').oninput=e=>{
-  if(!e.target.matches('.qt'))return;
-  const i=Number(e.target.dataset.i),q=Number(e.target.value)||0,x=pending[i];
-  const units=x.type==='spirit'?Math.round((x.bottleMl/MEASURE_ML)*q):x.pack*q;
-  $('detected').querySelector('.units[data-i="'+i+'"]').textContent=units+' '+(x.type==='spirit'?'shots':'units');
-};
-$('cancel').onclick=()=>{$('modal').style.display='none'};
-$('confirm').onclick=async()=>{
-  const btn=$('confirm');btn.disabled=true;
-  try{
-    for(let i=0;i<pending.length;i++){
-      const name=$('detected').querySelector('.nm[data-i="'+i+'"]').value.trim();
-      const qty=Number($('detected').querySelector('.qt[data-i="'+i+'"]').value)||0;
-      const x=pending[i];
-      if(!name||qty<=0)continue;
-      const units=x.type==='spirit'?Math.round((x.bottleMl/MEASURE_ML)*qty):x.pack*qty;
-      const existing=products.find(p=>p.name.toLowerCase()===name.toLowerCase());
-      let r;
-      if(existing)r=await db.from('stock_products').update({received:Number(existing.received||0)+units,updated_at:new Date().toISOString()}).eq('id',existing.id);
-      else r=await db.from('stock_products').insert({name,received:units,sold:0,low_stock_level:0});
-      if(r.error)throw r.error;
-    }
-    $('modal').style.display='none';pending=[];$('file').value='';$('status').textContent='✓ Stock added to shared database';await load();
-  }catch(err){$('reviewMsg').textContent='Save failed: '+err.message}finally{btn.disabled=false}
-};
-if(sessionStorage.k==='1')show();
+function parseBooker(text){const items=[];for(const line of text.split(/\r?\n/).map(x=>x.replace(/\s+/g,' ').trim())){const m=line.match(/^\d{5,}\s+(.+?)\s+(\d+)\s+((?:\d+(?:\.\d+)?\s*(?:ml|cl|l|ltr|litre|liter))(?:\s+\d+x\d+(?:ml|cl|l))?)\s+(\d+)\s+/i);if(!m)continue;const name=m[1].trim(),pack=Number(m[2]),size=m[3],qty=Number(m[4]),spirit=isSpirit(name),ml=bottleMl(size);if(spirit){items.push({name:cleanSpiritName(name),type:'spirit',qty,bottleMl:ml,units:ml?Math.round(ml/MEASURE_ML*qty):0})}else{const ix=size.match(/(\d+)x/i),inner=ix?Number(ix[1]):1;items.push({name, type:'unit',qty,pack:pack*inner,units:qty*pack*inner})}}return{supplier:'Booker',items}}
+function parse(text){if(/booker/i.test(text))return parseBooker(text);const supplier=/lwc/i.test(text)?'LWC':/tesco/i.test(text)?'Tesco':'Receipt / invoice';const raw=text.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),items=[];for(let i=0;i<raw.length;i++){const line=raw[i].replace(/\s+/g,' '),m=line.match(/^(\d{1,3})\s+(.+?)\s+£\s*\d+(?:\.\d{1,2})?/);if(!m)continue;const qty=Number(m[1]),name=cleanName(m[2]);let extra='';for(let j=i+1;j<Math.min(i+4,raw.length);j++){const n=raw[j].replace(/\s+/g,' ');if(/^\d{1,3}\s+.+?\s+£\s*\d/i.test(n)||/^(subtotal|total|saving|promotion|clubcard|card|mastercard|visa|amex|points|authorisation|merchant)/i.test(n))break;if(/^cc\b/i.test(n)||/£/.test(n))continue;extra+=' '+n}const full=(name+' '+extra).trim();if(/subtotal|total|saving|promotion|vat|card|points/i.test(full))continue;const spirit=isSpirit(full),size=bottleMl(full);if(spirit){const ml=size||0;items.push({name:cleanSpiritName(name),type:'spirit',qty,bottleMl:ml,units:ml?Math.round(ml/MEASURE_ML*qty):0})}else{const px=full.match(/(\d+)\s*(?:x|×)\s*(?:\d+(?:\.\d+)?\s*)?(?:ml|cl|l|litre|liter)?/i),pack=px?Number(px[1]):1;items.push({name:cleanName(name),type:'unit',qty,pack,units:qty*pack})}}return{supplier,items}}
+$('file').onchange=async e=>{const f=e.target.files[0];if(!f)return;$('status').textContent='Reading '+f.name+'…';try{const text=(f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'))?await pdfText(f):await imageText(f);const r=parse(text);pending=r.items;$('supplier').textContent=r.supplier+' · '+f.name;$('reviewMsg').textContent=pending.length?pending.length+' stock line(s) found. Check everything before saving.':'I could not confidently identify any stock lines. Try a clearer photo or PDF.';$('reviewWarning').innerHTML=pending.some(x=>x.type==='spirit'&&!x.bottleMl)?'<div class="warning">One or more spirits do not have a readable bottle size. Those lines must be given a size before you can confirm.</div>':'';$('detected').innerHTML=pending.map((x,i)=>`<tr><td><input class="nm" data-i="${i}" value="${esc(x.name)}"></td><td><span class="tag ${x.type==='spirit'?'spirit':''}">${x.type==='spirit'?'SPIRIT':'UNIT'}</span></td><td><input class="qt" data-i="${i}" type="number" min="0" value="${x.qty}" style="width:70px"></td><td>${x.type==='spirit'?`<input class="size" data-i="${i}" type="number" min="1" value="${x.bottleMl||''}" placeholder="ml" style="width:90px"> ml bottle`:`pack ${x.pack}`}</td><td class="units" data-i="${i}">${x.type==='spirit'?(x.units?x.units+' shots':'SIZE REQUIRED'):(x.units+' units')}</td></tr>`).join('');$('modal').style.display='flex'}catch(err){$('progress').style.display='none';$('status').textContent='Could not read the file: '+err.message}};
+$('detected').oninput=e=>{const t=e.target;if(!t.matches('.qt')&&!t.matches('.size'))return;const i=Number(t.dataset.i),x=pending[i],q=Number(document.querySelector(`.qt[data-i="${i}"]`)?.value)||0;if(x.type==='spirit'){const size=Number(document.querySelector(`.size[data-i="${i}"]`)?.value)||0;x.bottleMl=size;x.units=size?Math.round(size/MEASURE_ML*q):0;document.querySelector(`.units[data-i="${i}"]`).textContent=x.units?x.units+' shots':'SIZE REQUIRED'}};
+$('cancel').onclick=()=>{$('modal').style.display='none';$('file').value=''};
+$('confirm').onclick=async()=>{if(!pending.length)return;for(const x of pending){if(x.type==='spirit'&&!x.bottleMl){alert('Please enter the bottle size for '+x.name+' before confirming.');return}}$('confirm').disabled=true;try{for(const x of pending){const units=Number(x.units)||0;if(!units)continue;const existing=products.find(p=>String(p.name).trim().toLowerCase()===String(x.name).trim().toLowerCase());if(existing){const r=await db.from('stock_products').update({received:Number(existing.received||0)+units}).eq('id',existing.id);if(r.error)throw r.error}else{const r=await db.from('stock_products').insert({name:x.name,received:units,sold:0});if(r.error)throw r.error}}$('modal').style.display='none';$('status').textContent='✓ Stock added successfully.';pending=[];await load()}catch(err){alert('Could not save stock: '+err.message)}finally{$('confirm').disabled=false}};
 </script>
 </body>
 </html>
