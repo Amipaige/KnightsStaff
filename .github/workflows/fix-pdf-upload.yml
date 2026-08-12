@@ -1,0 +1,73 @@
+name: Fix PDF invoice reading
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-pdf-upload.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch PDF reader with OCR fallback
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          patch=r'''<script>
+          (function(){
+            const fileInput=document.getElementById('file');
+            if(!fileInput) return;
+            async function ocrPdf(file){
+              const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer()),disableWorker:true}).promise;
+              let text='';
+              for(let n=1;n<=pdf.numPages;n++){
+                const page=await pdf.getPage(n), viewport=page.getViewport({scale:2});
+                const canvas=document.createElement('canvas');
+                canvas.width=Math.ceil(viewport.width); canvas.height=Math.ceil(viewport.height);
+                await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
+                $('status').textContent='Reading PDF page '+n+' of '+pdf.numPages+'…';
+                const r=await Tesseract.recognize(canvas,'eng');
+                text+='\n'+r.data.text+'\n';
+              }
+              return text;
+            }
+            async function readPdf(file){
+              let text='';
+              try{text=await pdfText(file);}catch(e){}
+              if(text.replace(/\s/g,'').length>=40) return text;
+              $('status').textContent='PDF is image-based. Reading it with OCR…';
+              return ocrPdf(file);
+            }
+            fileInput.onchange=async function(e){
+              const f=e.target.files&&e.target.files[0]; if(!f)return;
+              $('status').textContent='Reading '+f.name+'…';
+              try{
+                const text=(f.type==='application/pdf'||/\.pdf$/i.test(f.name))?await readPdf(f):await imageText(f);
+                let r=parse(text);
+                pending=r.items||[];
+                $('supplier').textContent=r.supplier+' · '+f.name;
+                $('reviewMsg').textContent=pending.length?pending.length+' stock lines found. Check them before confirming.':'The document was read, but no stock lines could be identified. Try a clearer PDF/photo.';
+                draw(); $('modal').style.display='flex';
+                $('status').textContent='✓ Document read. Review the stock before confirming.';
+              }catch(err){
+                console.error(err);
+                $('status').textContent='Could not read the invoice: '+(err?.message||'unknown error');
+                alert('Could not read the invoice. The PDF reader failed. Please try the PDF again or upload a clear photo.');
+              }
+            };
+          })();
+          </script>'''
+          s=s.replace('</body>',patch+'</body>')
+          p.write_text(s)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet || git commit -m 'Fix PDF invoice OCR fallback'
+          git push
