@@ -49,4 +49,40 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup); else setup();
 })();
+</script><script>
+(function() {
+  const HASH = '59ee58a08f15abe3c316177cf952fa86ad7ad3d4512cd89eddbb2d013fd4e8b6';
+  const $ = id => document.getElementById(id);
+  async function sha(v) {
+    const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v));
+    return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,'0')).join('');
+  }
+  function setup() {
+    const login = $('login'), app = $('app'), pw = $('pw'), btn = $('loginBtn'), err = $('loginErr');
+    async function doLogin() {
+      err.textContent = '';
+      const raw = (pw.value || '').trim();
+      if (!raw) { err.textContent = 'Please enter the password.'; return; }
+      try {
+        if ((await sha(raw)) !== HASH) { err.textContent = 'Incorrect password.'; return; }
+        sessionStorage.setItem('k','1');
+        login.style.display = 'none';
+        app.style.display = 'block';
+        if (typeof window.load === 'function') window.load();
+      } catch(e) { err.textContent = 'Login could not run. Please refresh the page.'; }
+    }
+    if (btn) btn.onclick = doLogin;
+    if (pw) pw.onkeydown = e => { if (e.key === 'Enter') doLogin(); };
+    document.querySelectorAll('.nav button[data-tab]').forEach(button => {
+      button.onclick = function() {
+        document.querySelectorAll('.nav button[data-tab]').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('#app section').forEach(x => x.classList.add('hidden'));
+        this.classList.add('active');
+        const target = $(this.getAttribute('data-tab'));
+        if (target) target.classList.remove('hidden');
+      };
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup); else setup();
+})();
 </script></body></html>
