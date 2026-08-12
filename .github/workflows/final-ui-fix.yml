@@ -1,0 +1,75 @@
+name: Final UI fix - supplied logo, login and tabs
+on:
+  push:
+    paths:
+      - '.github/workflows/final-ui-fix.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply exact supplied logo and robust UI handlers
+        env:
+          LOGO_B64: PLACEHOLDER
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          b64 = os.environ['LOGO_B64']
+          svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 576" role="img" aria-label="Knights Mobile Bars logo"><image href="data:image/jpeg;base64,' + b64 + '" width="600" height="576" preserveAspectRatio="xMidYMid meet"/></svg>'
+          Path('logo-exact.svg').write_text(svg)
+
+          p = Path('index.html')
+          s = p.read_text()
+          s = s.replace('logo-exact.svg?v=5', 'logo-exact.svg?v=6')
+          marker = '</body>'
+          patch = r'''<script>
+          (function() {
+            const HASH = '59ee58a08f15abe3c316177cf952fa86ad7ad3d4512cd89eddbb2d013fd4e8b6';
+            const $ = id => document.getElementById(id);
+            async function sha(v) {
+              const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v));
+              return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,'0')).join('');
+            }
+            function setup() {
+              const login = $('login'), app = $('app'), pw = $('pw'), btn = $('loginBtn'), err = $('loginErr');
+              async function doLogin() {
+                err.textContent = '';
+                const raw = (pw.value || '').trim();
+                if (!raw) { err.textContent = 'Please enter the password.'; return; }
+                try {
+                  if ((await sha(raw)) !== HASH) { err.textContent = 'Incorrect password.'; return; }
+                  sessionStorage.setItem('k','1');
+                  login.style.display = 'none';
+                  app.style.display = 'block';
+                  if (typeof window.load === 'function') window.load();
+                } catch(e) { err.textContent = 'Login could not run. Please refresh the page.'; }
+              }
+              if (btn) btn.onclick = doLogin;
+              if (pw) pw.onkeydown = e => { if (e.key === 'Enter') doLogin(); };
+              document.querySelectorAll('.nav button[data-tab]').forEach(button => {
+                button.onclick = function() {
+                  document.querySelectorAll('.nav button[data-tab]').forEach(x => x.classList.remove('active'));
+                  document.querySelectorAll('#app section').forEach(x => x.classList.add('hidden'));
+                  this.classList.add('active');
+                  const target = $(this.getAttribute('data-tab'));
+                  if (target) target.classList.remove('hidden');
+                };
+              });
+            }
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup); else setup();
+          })();
+          </script>'''
+          s = s.replace(marker, patch + marker)
+          p.write_text(s)
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html logo-exact.svg
+          git diff --cached --quiet || git commit -m 'Fix supplied logo login and tabs'
+          git push
