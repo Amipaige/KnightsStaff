@@ -1,2 +1,4 @@
 # KnightsStock
-Stock check app 
+Stock check app
+
+Parser update trigger.
