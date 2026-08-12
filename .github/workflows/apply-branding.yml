@@ -1,0 +1,31 @@
+name: Apply Knights branding
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  brand:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add logo and favicon
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          if 'favicon.png' not in s:
+              s=s.replace('<meta name="theme-color" content="#111">','<meta name="theme-color" content="#111"><link rel="icon" type="image/png" href="favicon.png"><link rel="apple-touch-icon" href="logo.png">')
+          if '<img class="login-logo-img"' not in s:
+              s=s.replace('<div class="brand">Knights Mobile Bars</div><p class="muted">STOCK CONTROL</p>','<img class="login-logo-img" src="logo.png" alt="Knights Mobile Bars logo"><p class="muted">STOCK CONTROL</p>',1)
+              s=s.replace('.brand{font:28px Georgia,serif}', '.brand{font:28px Georgia,serif}.login-logo-img{width:150px;height:150px;object-fit:contain;display:block;margin:0 auto 8px}')
+          p.write_text(s)
+          PY
+      - name: Commit branding changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet || git commit -m 'Add Knights logo to app' && git push
