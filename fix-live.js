@@ -20,18 +20,20 @@
 
   function genericInvoice(text){const out=[];const lines=String(text).replace(/\u00a0/g,' ').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);for(let i=0;i<lines.length;i++){const line=lines[i];if(/^(subtotal|total|saving|promotion|discount|vat|invoice|receipt|payment|balance|account|date|delivery|customer|supplier|page\b)/i.test(line)||!/£\s*\d/.test(line))continue;let q=1,name='';let m=line.match(/^(\d{1,4})\s+(.*?)\s+£\s*\d+(?:\.\d{1,2})?/);if(m){q=Number(m[1]);name=m[2]}else{m=line.match(/^(.*?)\s+(?:£\s*\d+(?:\.\d{1,2})?)\s+(\d{1,4})$/);if(m){name=m[1];q=Number(m[2])}}if(!name)continue;name=name.replace(/\s+/g,' ').trim();const full=name+' '+lines.slice(i+1,i+3).join(' ');if(isSpirit(full)){const ml=sizeMl(full);out.push({name:name.replace(/\b\d+(?:\.\d+)?\s*(?:ml|cl|l|litre|liter)\b/ig,'').trim(),type:'spirit',qty:q,bottleMl:ml,units:ml?Math.round(ml/MEASURE*q):0,sizeText:ml?ml+'ml bottle':'SIZE REQUIRED'})}else{const pm=full.match(/(\d+)\s*[x×]/i),pack=pm?Number(pm[1]):1;out.push({name,type:'unit',qty:q,units:q*pack,sizeText:pack>1?'pack '+pack:'unit'})}}return out}
 
+  // LWC/Transaction Detail invoices: product rows have part number, description, delivery date, UOS, status, unit price, Qty, line total.
   function parseLWCRobust(text){
-    const s=String(text||'').replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim();
-    const re=/(\d{8})\s+(.+?)\s+(\d{2}\/\d{2}\/\d{4})\s+\d+\s+\w+\s+£\d+(?:\.\d{2})\s+(\d+)\s+£\d+(?:\.\d{2})/g;
+    const s=String(text||'').replace(/\u00a0/g,' ').replace(/[\r\n]+/g,' ').replace(/\s+/g,' ').trim();
+    const re=/(\d{7,9})\s+(.+?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d+)\s+Placed\s+£\s*\d+(?:\.\d{2})\s+(\d+)\s+£\s*\d+(?:\.\d{2})/gi;
     const items=[];let m;
     while((m=re.exec(s))){
       let name=m[2].trim();
-      const qty=Number(m[4])||1;
+      const uos=Number(m[4])||1;
+      const qty=Number(m[5])||1;
       const pack=name.match(/\b(\d+)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(ml|cl|l)\b/i);
       const keg=name.match(/\b(\d+(?:\.\d+)?)\s*l\s*keg\b/i);
       let units=qty,sizeText='unit',type='unit';
-      if(pack){units=qty*Number(pack[1]);sizeText=`${pack[1]} x ${pack[2]}${pack[3]}`}else if(keg){type='keg';sizeText=`${keg[1]}L keg`;units=qty}
-      items.push({name,type,qty,units,sizeText,ref:m[1]});
+      if(pack){units=qty*Number(pack[1]);sizeText=`${pack[1]} x ${pack[2]}${pack[3]}`}else if(keg){type='keg';sizeText=`${keg[1]}L keg`;units=qty}else{units=qty}
+      items.push({name,type,qty,units,sizeText,ref:m[1],uos});
     }
     return items;
   }
@@ -80,7 +82,9 @@
   }
 
   function parseInvoiceText(text){
-    if(/Transaction\s*Detail/i.test(text)&&/LWC/i.test(text)){const items=parseLWCRobust(text);if(items.length)return{supplier:'LWC',items}}
+    // Do not require the literal word LWC: the actual PDF can have the Transaction Detail table without it in extracted text.
+    if(/Transaction\s*Detail/i.test(text)&&/Part\s*Number/i.test(text)&&/Qty\s+Line\s+Total/i.test(text)){const items=parseLWCRobust(text);if(items.length)return{supplier:'LWC',items}}
+    if(/Part\s*Number/i.test(text)&&/Delivery\s*Date/i.test(text)&&/Placed/i.test(text)){const items=parseLWCRobust(text);if(items.length)return{supplier:'LWC',items}}
     if(/Booker/i.test(text)){const items=parseBookerRobust(text);if(items.length)return{supplier:'Booker',items}}
     if(window.parse){const r=window.parse(text);if(r?.items?.length)return r}
     return{supplier:/Tesco/i.test(text)?'Tesco':'Invoice / receipt',items:genericInvoice(text)};
