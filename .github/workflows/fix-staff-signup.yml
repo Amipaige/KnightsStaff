@@ -1,0 +1,33 @@
+name: Fix Knights Staff account creation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/fix-staff-signup.yml'
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch signup handling
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('staffing.html')
+          s=p.read_text(encoding='utf-8')
+          pat=r"async function signup\(\)\{.*?\}async function start\(user\)\{"
+          new="""async function signup(){const e=$('email').value.trim(),p=$('password').value;if(!e){$('authMsg').textContent='Please enter your email address.';return}if(!p||p.length<8){$('authMsg').textContent='Password must be at least 8 characters.';return}$('signupBtn').disabled=true;$('signupBtn').textContent='Creating…';try{const {data,error}=await db.auth.signUp({email:e,password:p});if(error){$('authMsg').textContent=error.message;return}if(data.session&&data.user){const name=prompt('Your full name')||'';if(name){const x=await db.from('staff_profiles').upsert({id:data.user.id,email:e,full_name:name},{onConflict:'id'});if(x.error){$('authMsg').textContent='Account created, but your profile could not be saved. Please contact Knights.';return}}$('authMsg').textContent='Account created. Complete the New Starter Form, then wait for Knights to approve your account.';await start(data.user)}else{$('authMsg').textContent='Account created. Check your email to confirm your account, then return here and sign in. You can then complete the New Starter Form.'}}catch(err){$('authMsg').textContent=err?.message||'Something went wrong. Please try again.'}finally{$('signupBtn').disabled=false;$('signupBtn').textContent='Create account'}}async function start(user){"""
+          s2,n=re.subn(pat,new,s,count=1,flags=re.S)
+          if n!=1: raise SystemExit('Signup function not found')
+          p.write_text(s2,encoding='utf-8')
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add staffing.html
+          git diff --cached --quiet || git commit -m 'Fix staff account creation flow'
+          git push
