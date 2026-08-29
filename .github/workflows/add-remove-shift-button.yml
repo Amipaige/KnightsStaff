@@ -23,11 +23,8 @@ jobs:
           p = Path('staffing-v2.html')
           s = p.read_text()
 
-          old = "${s.status==='pending'?` Confirm <button onclick=\\\"setSignup('${s.id}','confirmed')\\\">Confirm</button> <button onclick=\\\"setSignup('${s.id}','declined')\\\">Decline</button>`:''}"
-          # The minified page uses a simpler literal fragment; replace that exact fragment.
-          old = "${s.status==='pending'?` <button onclick=\"setSignup('${s.id}','confirmed')\">Confirm</button> <button onclick=\"setSignup('${s.id}','declined')\">Decline</button>`:''}"
-          new = "${s.status==='pending'?` <button onclick=\"setSignup('${s.id}','confirmed')\">Confirm</button> <button onclick=\"setSignup('${s.id}','declined')\">Decline</button>`:''} <button class=\"red mini\" onclick=\"removeSignup('${s.id}')\">Remove</button>"
-
+          old = '''${s.status==='pending'?` <button onclick="setSignup('${s.id}','confirmed')">Confirm</button> <button onclick="setSignup('${s.id}','declined')">Decline</button>`:''}'''
+          new = '''${s.status==='pending'?` <button onclick="setSignup('${s.id}','confirmed')">Confirm</button> <button onclick="setSignup('${s.id}','declined')">Decline</button>`:''} <button class="btn mini red" onclick="removeSignup('${s.id}')">Remove</button>'''
           if old not in s:
               raise SystemExit('Could not find staff request controls')
           s = s.replace(old, new, 1)
