@@ -1,0 +1,36 @@
+name: Apply Knights app logo
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-logo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add app logo to staffing page
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('staffing.html')
+          s = p.read_text()
+          if 'knights-mobile-bars-logo.svg' in s:
+              raise SystemExit(0)
+          old = '<header class="head"><div class="brand">KNIGHTS</div><div class="sub">MOBILE BARS · STAFF</div></header>'
+          new = '<header class="head"><img src="knights-mobile-bars-logo.svg" alt="Knights Mobile Bars" style="display:block;width:170px;height:170px;object-fit:contain;margin:0 auto 8px;border-radius:14px"><div class="brand">KNIGHTS</div><div class="sub">MOBILE BARS · STAFF</div></header>'
+          if old not in s:
+              raise SystemExit('Header markup not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Commit change
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add staffing.html
+          git diff --cached --quiet && exit 0
+          git commit -m 'Add Knights Mobile Bars app logo'
+          git push
