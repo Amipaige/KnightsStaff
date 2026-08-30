@@ -1,0 +1,12 @@
+{
+  "name": "Knights Staff",
+  "short_name": "Knights Staff",
+  "start_url": "./staffing.html",
+  "display": "standalone",
+  "background_color": "#f6f1e8",
+  "theme_color": "#171716",
+  "icons": [
+    {"src":"./logo.png","sizes":"512x512","type":"image/png","purpose":"any maskable"},
+    {"src":"./logo-exact.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}
+  ]
+}
