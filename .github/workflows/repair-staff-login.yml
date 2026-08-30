@@ -1,0 +1,78 @@
+name: Repair Knights Staff login
+on:
+  push:
+    paths:
+      - '.github/workflows/repair-staff-login.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Repair the live staff login and cache-bust entry points
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('staffing-legacy.html')
+          s = p.read_text(encoding='utf-8')
+
+          old_login = '<button class="btn" id="loginBtn" type="button">Sign in</button><button class="btn gold" id="showSignupBtn" type="button">Create account</button>'
+          new_login = '<button class="btn" id="loginBtn" type="button">Sign in</button><button class="link" id="forgotBtn" type="button">Forgot your password?</button><button class="btn gold" id="showSignupBtn" type="button">Create account</button>'
+          if old_login not in s:
+              raise SystemExit('Expected legacy login buttons were not found')
+          s = s.replace(old_login, new_login, 1)
+
+          old_signup = '<div id="signupFields" class="hidden create-mode">'
+          forgot_html = '<div id="forgotFields" class="hidden create-mode"><h2>Reset your password</h2><p class="small">Enter your Knights account email and we will send you a secure reset link.</p><label>Email</label><input id="resetEmail" type="email" autocomplete="email" placeholder="you@example.com"><button class="btn gold" id="resetBtn" type="button">Send reset email</button><button class="btn light" id="backForgotBtn" type="button">Back to sign in</button></div>'
+          if old_signup not in s:
+              raise SystemExit('Expected signup section was not found')
+          s = s.replace(old_signup, forgot_html + old_signup, 1)
+
+          old_error = "const friendlyError=(e,area='APP')=>{const raw=String(e?.message||e||'');let detail='Something went wrong. Please try again.';if(/invalid input syntax for type uuid/i.test(raw)&&/undefined/i.test(raw))detail='Your account session was incomplete. Please refresh the page and sign in again.';else if(/invalid login credentials/i.test(raw))detail='The email or password is incorrect.';else if(/email not confirmed/i.test(raw))detail='Please verify your email address before signing in.';else if(/duplicate key|already exists|23505/i.test(raw))detail='That record already exists.';else if(/permission|row-level security|42501/i.test(raw))detail='You do not have permission to complete that action.';const code='KN-'+area+'-'+(e?.code||'GEN');console.error(code,e);return detail+'\\nError code: '+code};"
+          new_error = "const friendlyError=(e,area='APP')=>{const raw=String(e?.message||e||''),lower=raw.toLowerCase();let stage=area,suffix='GEN',detail='We could not complete that action. Please try again.';if(/invalid login credentials|invalid_credentials/.test(lower)){stage='AUTH';suffix='001';detail='The email or password is incorrect.'}else if(/email not confirmed|not confirmed/.test(lower)){stage='AUTH';suffix='002';detail='Please verify your email address before signing in.'}else if(/rate limit|too many requests/.test(lower)){stage='AUTH';suffix='003';detail='Too many sign-in attempts. Please wait a few minutes and try again.'}else if(/failed to fetch|network|load failed/.test(lower)){stage='SYSTEM';suffix='002';detail='We could not connect to the Knights service. Check your connection and try again.'}else if(/invalid input syntax for type uuid/i.test(raw)&&/undefined/i.test(raw)){stage='PROFILE';suffix='001';detail='Login worked, but your staff profile could not be loaded. Please sign in again.'}else if(area==='APP'&&/staff_profiles|profile/i.test(lower)){stage='PROFILE';suffix='001';detail='Login worked, but your staff profile could not be loaded. Please try again.'}else if(area==='APP'&&/bar_events|shift_signups|events|shifts/i.test(lower)){stage='DATA';suffix='001';detail='Login worked, but your shifts could not be loaded. Please try again.'}else if(/duplicate key|already exists|23505/i.test(raw)){detail='That record already exists.'}else if(/permission|row-level security|42501/i.test(raw)){detail='You do not have permission to complete that action.'}const code='KN-'+stage+'-'+suffix;console.error(code,e);return detail+'\\nError code: '+code};"
+          if old_error not in s:
+              raise SystemExit('Expected friendlyError function was not found')
+          s = s.replace(old_error, new_error, 1)
+
+          old_login_catch = "}catch(e){msg(friendlyError(e,'LOGIN'))}finally{$('loginBtn').disabled=false}}async function loadApp(user){"
+          new_login_catch = "}catch(e){msg(friendlyError(e,'AUTH'))}finally{$('loginBtn').disabled=false}}async function resetPassword(){const email=$('resetEmail').value.trim().toLowerCase();if(!email)return msg('Enter your account email.');$('resetBtn').disabled=true;$('resetBtn').textContent='Sending…';try{const r=await db.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+window.location.pathname});if(r.error)throw r.error;msg('If that email is registered with Knights, a password reset email has been sent. Check your inbox and spam/junk.');}catch(e){msg(friendlyError(e,'AUTH'))}finally{$('resetBtn').disabled=false;$('resetBtn').textContent='Send reset email'}}async function loadApp(user){"
+          if old_login_catch not in s:
+              raise SystemExit('Expected login catch was not found')
+          s = s.replace(old_login_catch, new_login_catch, 1)
+
+          old_handlers = "$('showSignupBtn').onclick=()=>setAuthMode(true);$('backLoginBtn').onclick=()=>setAuthMode(false);$('signupBtn').onclick=signup;"
+          new_handlers = "$('showSignupBtn').onclick=()=>setAuthMode(true);$('forgotBtn').onclick=()=>{$('loginFields').classList.add('hidden');$('forgotFields').classList.remove('hidden');$('resetEmail').value=$('email').value.trim();$('resetEmail').focus();msg('')};$('backForgotBtn').onclick=()=>{$('forgotFields').classList.add('hidden');$('loginFields').classList.remove('hidden');msg('');$('email').focus()};$('resetBtn').onclick=resetPassword;$('backLoginBtn').onclick=()=>setAuthMode(false);$('signupBtn').onclick=signup;"
+          if old_handlers not in s:
+              raise SystemExit('Expected login handlers were not found')
+          s = s.replace(old_handlers, new_handlers, 1)
+
+          p.write_text(s, encoding='utf-8')
+
+          for name in ['staffing.html','knights-staff.html','staff-login.html']:
+              q = Path(name)
+              t = q.read_text(encoding='utf-8')
+              t = t.replace('20260830-1230', '20260830-1245').replace('20260830-1235', '20260830-1245')
+              q.write_text(t, encoding='utf-8')
+          PY
+      - name: Verify repair
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('staffing-legacy.html').read_text(encoding='utf-8')
+          required=['Forgot your password?','id="forgotFields"','resetPassword','KN-AUTH-001','KN-AUTH-002']
+          missing=[x for x in required if x not in s]
+          if missing:
+              raise SystemExit('Repair verification failed: '+', '.join(missing))
+          if 'friendlyError(e,\'LOGIN\')' in s:
+              raise SystemExit('Old LOGIN error stage still present')
+          print('OK: Knights Staff login repair is present')
+          PY
+      - name: Commit repair
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add staffing-legacy.html staffing.html knights-staff.html staff-login.html
+          git diff --cached --quiet || git commit -m 'Repair Knights Staff login and password reset'
+          git push
