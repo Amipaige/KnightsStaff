@@ -1,0 +1,35 @@
+name: Make staffing stat clickable
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[click-needs-staffing]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch admin staffing statistic
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('staffing.html')
+          s=p.read_text(encoding='utf-8')
+          old='<div class="stat"><b id="openCount">0</b><span>Need staffing</span></div>'
+          new='<div class="stat" id="needsStaffingStat" role="button" tabindex="0" title="Go to Events" onclick="document.getElementById(\'adminEvents\').scrollIntoView({behavior:\'smooth\',block:\'start\'})" onkeydown="if(event.key===\'Enter\'||event.key===\' \')document.getElementById(\'adminEvents\').scrollIntoView({behavior:\'smooth\',block:\'start\'})"><b id="openCount">0</b><span>Need staffing</span></div>'
+          if old not in s:
+              raise SystemExit('Needs staffing statistic not found')
+          s=s.replace(old,new,1)
+          css='.stat{cursor:pointer}.stat:focus{outline:2px solid var(--gold);outline-offset:2px}'
+          s=s.replace('</style>',css+'</style>',1)
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add staffing.html
+          git commit -m "Make needs staffing statistic clickable [click-needs-staffing]"
+          git push
