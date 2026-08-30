@@ -1,0 +1,40 @@
+name: Update Knights Staff logo
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/update-knights-logo.yml'
+permissions:
+  contents: write
+jobs:
+  update-logo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update logo in staffing app
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('staffing.html')
+          s = p.read_text()
+          logo = 'https://static.wixstatic.com/media/48b64c_6e6263475e734dbd8817e5298ab47790~mv2.png'
+          old = '<header class="head"><div class="brand">KNIGHTS</div><div class="sub">MOBILE BARS · STAFF</div></header>'
+          new = '<header class="head"><img class="app-logo" src="' + logo + '" alt="Knights Mobile Bars" loading="eager"><div class="sub">STAFFING</div></header>'
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif 'class="app-logo"' not in s:
+              raise SystemExit('Expected Knights header not found; refusing to overwrite staffing.html')
+          css_old = '.head{background:var(--ink);color:#fff;border-radius:18px;padding:24px 20px;margin-bottom:14px}.brand{font:32px Georgia,serif;letter-spacing:.12em}'
+          css_new = '.head{background:var(--ink);color:#fff;border-radius:18px;padding:20px;margin-bottom:14px;text-align:center}.app-logo{display:block;max-width:220px;width:78%;height:auto;max-height:120px;object-fit:contain;margin:0 auto}.brand{font:32px Georgia,serif;letter-spacing:.12em}'
+          if css_old in s:
+              s = s.replace(css_old, css_new, 1)
+          p.write_text(s)
+      - name: Commit logo update
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add staffing.html
+          git diff --cached --quiet || git commit -m "Update Knights Staff app logo [skip ci]"
+          git push
