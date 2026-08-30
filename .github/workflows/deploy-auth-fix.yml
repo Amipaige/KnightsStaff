@@ -1,0 +1,31 @@
+name: Deploy auth redirect fix
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch signup redirect
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('staffing.html')
+          s=p.read_text()
+          old="db.auth.signUp({email,password,options:{data:{full_name:name}}})"
+          new="db.auth.signUp({email,password,options:{data:{full_name:name},emailRedirectTo:window.location.origin+window.location.pathname}})"
+          if old not in s:
+              raise SystemExit('Signup code not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add staffing.html
+          git commit -m 'Fix signup email confirmation redirect'
+          git push
