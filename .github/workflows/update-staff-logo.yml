@@ -12,25 +12,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Add app logo metadata
+      - name: Set Knights Mobile Bars logo
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
           p = Path('staffing.html')
           s = p.read_text()
+          s = s.replace('https://static.wixstatic.com/media/48b64c_6e6263475e734dbd8817e5298ab47790~mv2.png', 'logo-exact.svg')
           marker = '<meta name="viewport" content="width=device-width,initial-scale=1">'
           additions = '<link rel="icon" href="logo-exact.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="logo.png"><link rel="manifest" href="manifest.json"><meta name="theme-color" content="#171716">'
           if 'rel="manifest" href="manifest.json"' not in s:
               if marker not in s:
                   raise SystemExit('viewport marker not found')
               s = s.replace(marker, marker + additions, 1)
-              p.write_text(s)
+          p.write_text(s)
           PY
-      - name: Commit logo metadata
+      - name: Commit logo update
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add staffing.html
-          git diff --cached --quiet || git commit -m "Set Knights Mobile Bars app logo [skip ci]"
+          git diff --cached --quiet || git commit -m "Use local Knights Mobile Bars logo [skip ci]"
           git push
