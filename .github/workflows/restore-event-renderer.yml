@@ -1,0 +1,43 @@
+name: Restore event display
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'staffing.html'
+permissions:
+  contents: write
+jobs:
+  restore:
+    if: ${{ !contains(github.event.head_commit.message, '[restore-events]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore renderer from known-good event-edit version
+        run: |
+          python3 - <<'PY'
+          import subprocess,re
+          from pathlib import Path
+          current=Path('staffing.html').read_text(encoding='utf-8')
+          old=subprocess.check_output(['git','show','024e6c6e294d3f1f4599eaa4eeece2603c70a52c:staffing.html'],text=True)
+          m=re.search(r'(function renderEvents\(byId\)\{.*?\})(function loadManagerLists\(\))',old,re.S)
+          if not m:
+              raise SystemExit('Known-good renderEvents block not found')
+          renderer=m.group(1)
+          if 'function renderEvents(byId)' in current:
+              current=re.sub(r'function renderEvents\(byId\)\{.*?\}(?=function loadManagerLists\(\))',renderer,current,count=1,flags=re.S)
+          else:
+              marker='function loadManagerLists()'
+              if marker not in current:
+                  raise SystemExit('Current loadManagerLists marker not found')
+              current=current.replace(marker,renderer+marker,1)
+          Path('staffing.html').write_text(current,encoding='utf-8')
+          PY
+      - name: Commit
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add staffing.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Restore admin event display [restore-events]"
+          git push
