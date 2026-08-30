@@ -33,4 +33,5 @@ jobs:
           git add staffing.html
           git diff --cached --quiet && exit 0
           git commit -m 'Add Knights Mobile Bars app logo'
+          git pull --rebase origin main
           git push
