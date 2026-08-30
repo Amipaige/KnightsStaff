@@ -1,1 +1,1 @@
-Temporary trigger for event display fix.
+Trigger admin event display repair now.
