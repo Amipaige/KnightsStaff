@@ -27,6 +27,32 @@ jobs:
         uses: actions/configure-pages@v5
       - name: Inject live Supabase fix
         run: python3 -c "from pathlib import Path; p=Path('index.html'); s=p.read_text(encoding='utf-8'); import re; s=re.sub(r'<script src=\"fix-live.js\\?v=[^\"]+\"></script>','',s); s=s.replace('</body>','<script src=\"fix-live.js?v=14\"></script><script src=\"cleanup-ui.js?v=1\"></script></body>'); p.write_text(s,encoding='utf-8')"
+      - name: Set Knights Staff app icon
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('staffing.html')
+          s = p.read_text(encoding='utf-8')
+          s = re.sub(r'<img src="knights-mobile-bars-logo\.svg"[^>]*>', '', s, count=1)
+          marker = '<meta name="viewport" content="width=device-width,initial-scale=1">'
+          tags = marker + '<meta name="theme-color" content="#171716"><link rel="manifest" href="./staff-manifest.json"><link rel="icon" type="image/svg+xml" href="./logo-exact.svg"><link rel="apple-touch-icon" href="./logo-exact.svg">'
+          s = s.replace(marker, tags, 1)
+          p.write_text(s, encoding='utf-8')
+          manifest = '''{
+            "name": "Knights Staff",
+            "short_name": "Knights Staff",
+            "start_url": "./staffing.html",
+            "scope": "./",
+            "display": "standalone",
+            "background_color": "#f6f1e8",
+            "theme_color": "#171716",
+            "icons": [
+              {"src": "./logo-exact.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+            ]
+          }'''
+          Path('staff-manifest.json').write_text(manifest, encoding='utf-8')
+          PY
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
