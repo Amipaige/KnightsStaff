@@ -1,0 +1,33 @@
+name: Fix staff-needed count
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[staff-needed-fix]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch staff event count
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('staffing.html')
+          s = p.read_text(encoding='utf-8')
+          old = "const own=await db.from('shift_signups').select('event_id,status').eq('staff_id',me.id);if(own.error)throw own.error;const map=Object.fromEntries((own.data||[]).map(x=>[x.event_id,x.status]));$('staffContent').innerHTML=r.data?.length?r.data.map(e=>`<div class=\"card\"><div class=\"row\"><div><div class=\"date\">${dateFmt(e.event_date)}</div><div class=\"event\">${esc(e.event_name)}</div></div><span class=\"badge\">${e.staff_required} staff needed</span></div>"
+          new = "const own=await db.from('shift_signups').select('event_id,status').eq('staff_id',me.id);if(own.error)throw own.error;const map=Object.fromEntries((own.data||[]).map(x=>[x.event_id,x.status]));const counts=await db.rpc('get_event_staffing_counts',{event_ids:(r.data||[]).map(e=>e.id)});if(counts.error)throw counts.error;const confirmed=Object.fromEntries((counts.data||[]).map(x=>[x.event_id,Number(x.confirmed_count||0)]));$('staffContent').innerHTML=r.data?.length?r.data.map(e=>`<div class=\"card\"><div class=\"row\"><div><div class=\"date\">${dateFmt(e.event_date)}</div><div class=\"event\">${esc(e.event_name)}</div></div><span class=\"badge\">${Math.max(0,e.staff_required-(confirmed[e.id]||0))} staff needed</span></div>"
+          if old not in s:
+              raise SystemExit('Staff event renderer pattern not found')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add staffing.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Fix confirmed staff count [staff-needed-fix]"
+          git push
