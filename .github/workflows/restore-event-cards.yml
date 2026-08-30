@@ -1,0 +1,32 @@
+name: Restore event cards
+on: [push]
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore event renderer
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('staffing.html')
+          s=p.read_text(encoding='utf-8')
+          if 'function renderEvents(byId)' in s:
+              print('renderer already present')
+              raise SystemExit(0)
+          marker='function loadManagerLists()'
+          fn=r'''function renderEvents(byId){const host=$('adminEvents');if(!events.length){host.innerHTML='<div class="card"><b>No upcoming events.</b><p class="small">Create an event above and it will appear here.</p></div>';return}host.innerHTML=events.map(e=>{const booked=activeSignups(e.id);const assigned=booked.map(s=>{const p=byId[s.staff_id];return p?`<div class="person"><div class="row"><div><b>${esc(p.full_name)}</b><br><span class="small">${esc(p.email)}</span></div><span class="badge ${s.status==='confirmed'?'approved':s.status==='pending'?'pending':'need'}">${esc(statusLabel(s.status))}</span></div><div class="actions">${s.status==='pending'?`<button class="btn mini green" onclick="setSignup('${s.id}','confirmed')">Confirm</button><button class="btn mini red" onclick="setSignup('${s.id}','declined')">Decline</button>`:''}<button class="btn mini light" onclick="removeSignup('${s.id}')">Remove</button></div></div>`:''}).join('');const options=people.filter(p=>(p.role==='staff'&&p.registration_status==='approved')||p.role==='admin').filter(p=>!booked.some(x=>x.staff_id===p.id)).map(p=>`<option value="${p.id}">${esc(p.full_name)}</option>`).join('');return `<div class="card"><div class="row"><div><div class="date">${dateFmt(e.event_date)}</div><div class="event">${esc(e.event_name)}</div></div><span class="badge ${booked.length<e.staff_required?'need':'approved'}">${booked.length}/${e.staff_required} staff</span></div><div class="meta">📍 ${esc(e.venue)}<br>🕐 Arrival ${timeFmt(e.arrival_time)} · ${timeFmt(e.start_time)}–${timeFmt(e.finish_time)}</div><div class="manager">👑 Bar Manager: <b>${esc(e.manager_name||'Not assigned')}</b></div>${e.bar_package?`<div class="small">Package: ${esc(e.bar_package)}</div>`:''}${e.dress_code?`<div class="small">Dress: ${esc(e.dress_code)}</div>`:''}${e.notes?`<div class="small">Notes: ${esc(e.notes)}</div>`:''}<div class="event-actions"><button class="btn gold" onclick="openEdit('${e.id}')">✏️ Amend event</button><button class="btn red" onclick="deleteEvent('${e.id}')">🗑️ Delete event</button></div><h3>Staff assigned</h3>${assigned||'<p class="small">No staff assigned yet.</p>'}<div class="actions"><select id="addStaff_${e.id}"><option value="">Add approved staff…</option>${options}</select><button class="btn green" onclick="addStaffToShift('${e.id}')">Add staff</button></div></div>`}).join('')}
+'''
+          if marker not in s: raise SystemExit('marker missing')
+          p.write_text(s.replace(marker,fn+marker,1),encoding='utf-8')
+          PY
+      - name: Commit renderer
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add staffing.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Restore admin event cards [skip ci]"
+          git push
