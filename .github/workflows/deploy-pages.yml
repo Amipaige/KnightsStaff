@@ -53,6 +53,7 @@ jobs:
           }'''
           Path('staff-manifest.json').write_text(manifest, encoding='utf-8')
           PY
+      # Force a fresh GitHub Pages deployment so main is definitely live.
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
