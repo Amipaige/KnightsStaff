@@ -27,6 +27,37 @@ jobs:
         uses: actions/configure-pages@v5
       - name: Inject live Supabase fix
         run: python3 -c "from pathlib import Path; p=Path('index.html'); s=p.read_text(encoding='utf-8'); import re; s=re.sub(r'<script src=\"fix-live.js\\?v=[^\"]+\"></script>','',s); s=s.replace('</body>','<script src=\"fix-live.js?v=14\"></script><script src=\"cleanup-ui.js?v=1\"></script></body>'); p.write_text(s,encoding='utf-8')"
+      - name: Repair Knights Staff login in deployed site
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('staffing-legacy.html')
+          s=p.read_text(encoding='utf-8')
+          old='<button class="btn" id="loginBtn" type="button">Sign in</button><button class="btn gold" id="showSignupBtn" type="button">Create account</button>'
+          new='<button class="btn" id="loginBtn" type="button">Sign in</button><button class="link" id="forgotBtn" type="button">Forgot your password?</button><button class="btn gold" id="showSignupBtn" type="button">Create account</button>'
+          if old in s: s=s.replace(old,new,1)
+          signup='<div id="signupFields" class="hidden create-mode">'
+          forgot='<div id="forgotFields" class="hidden create-mode"><h2>Reset your password</h2><p class="small">Enter your Knights account email and we will send you a secure reset link.</p><label>Email</label><input id="resetEmail" type="email" autocomplete="email" placeholder="you@example.com"><button class="btn gold" id="resetBtn" type="button">Send reset email</button><button class="btn light" id="backForgotBtn" type="button">Back to sign in</button></div>'
+          if forgot not in s and signup in s: s=s.replace(signup,forgot+signup,1)
+          old_fn="const friendlyError=(e,area='APP')=>{const raw=String(e?.message||e||'');let detail='Something went wrong. Please try again.';if(/invalid input syntax for type uuid/i.test(raw)&&/undefined/i.test(raw))detail='Your account session was incomplete. Please refresh the page and sign in again.';else if(/invalid login credentials/i.test(raw))detail='The email or password is incorrect.';else if(/email not confirmed/i.test(raw))detail='Please verify your email address before signing in.';else if(/duplicate key|already exists|23505/i.test(raw))detail='That record already exists.';else if(/permission|row-level security|42501/i.test(raw))detail='You do not have permission to complete that action.';const code='KN-'+area+'-'+(e?.code||'GEN');console.error(code,e);return detail+'\\nError code: '+code};"
+          new_fn="const friendlyError=(e,area='APP')=>{const raw=String(e?.message||e||''),lower=raw.toLowerCase();let stage=area,suffix='GEN',detail='We could not complete that action. Please try again.';if(/invalid login credentials|invalid_credentials/.test(lower)){stage='AUTH';suffix='001';detail='The email or password is incorrect.'}else if(/email not confirmed|not confirmed/.test(lower)){stage='AUTH';suffix='002';detail='Please verify your email address before signing in.'}else if(/rate limit|too many requests/.test(lower)){stage='AUTH';suffix='003';detail='Too many sign-in attempts. Please wait a few minutes and try again.'}else if(/failed to fetch|network|load failed/.test(lower)){stage='SYSTEM';suffix='002';detail='We could not connect to the Knights service. Check your connection and try again.'}else if(/invalid input syntax for type uuid/i.test(raw)&&/undefined/i.test(raw)){stage='PROFILE';suffix='001';detail='Login worked, but your staff profile could not be loaded. Please sign in again.'}else if(area==='APP'&&/staff_profiles|profile/i.test(lower)){stage='PROFILE';suffix='001';detail='Login worked, but your staff profile could not be loaded. Please try again.'}else if(area==='APP'&&/bar_events|shift_signups|events|shifts/i.test(lower)){stage='DATA';suffix='001';detail='Login worked, but your shifts could not be loaded. Please try again.'}else if(/duplicate key|already exists|23505/i.test(raw)){detail='That record already exists.'}else if(/permission|row-level security|42501/i.test(raw)){detail='You do not have permission to complete that action.'}const code='KN-'+stage+'-'+suffix;console.error(code,e);return detail+'\\nError code: '+code};"
+          if old_fn in s: s=s.replace(old_fn,new_fn,1)
+          old_login="}catch(e){msg(friendlyError(e,'LOGIN'))}finally{$('loginBtn').disabled=false}}async function loadApp(user){"
+          new_login="}catch(e){msg(friendlyError(e,'AUTH'))}finally{$('loginBtn').disabled=false}}async function resetPassword(){const email=$('resetEmail').value.trim().toLowerCase();if(!email)return msg('Enter your account email.');$('resetBtn').disabled=true;$('resetBtn').textContent='Sending…';try{const r=await db.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+window.location.pathname});if(r.error)throw r.error;msg('If that email is registered with Knights, a password reset email has been sent. Check your inbox and spam/junk.')}catch(e){msg(friendlyError(e,'AUTH'))}finally{$('resetBtn').disabled=false;$('resetBtn').textContent='Send reset email'}}async function loadApp(user){"
+          if old_login in s: s=s.replace(old_login,new_login,1)
+          old_handlers="$('showSignupBtn').onclick=()=>setAuthMode(true);$('backLoginBtn').onclick=()=>setAuthMode(false);$('signupBtn').onclick=signup;"
+          new_handlers="$('showSignupBtn').onclick=()=>setAuthMode(true);$('forgotBtn').onclick=()=>{$('loginFields').classList.add('hidden');$('forgotFields').classList.remove('hidden');$('resetEmail').value=$('email').value.trim();$('resetEmail').focus();msg('')};$('backForgotBtn').onclick=()=>{$('forgotFields').classList.add('hidden');$('loginFields').classList.remove('hidden');msg('');$('email').focus()};$('resetBtn').onclick=resetPassword;$('backLoginBtn').onclick=()=>setAuthMode(false);$('signupBtn').onclick=signup;"
+          if old_handlers in s: s=s.replace(old_handlers,new_handlers,1)
+          p.write_text(s,encoding='utf-8')
+          for name in ['staffing.html','knights-staff.html','staff-login.html']:
+            q=Path(name); t=q.read_text(encoding='utf-8'); t=t.replace('20260830-1230','20260830-1245').replace('20260830-1235','20260830-1245'); q.write_text(t,encoding='utf-8')
+          # Fail the deployment rather than silently shipping the old login.
+          deployed=p.read_text(encoding='utf-8')
+          required=['Forgot your password?','id="forgotFields"','resetPassword','KN-AUTH-001']
+          missing=[x for x in required if x not in deployed]
+          if missing: raise SystemExit('Staff login repair verification failed: '+', '.join(missing))
+          print('Verified: current Knights Staff login repair is in the Pages artifact')
+          PY
       - name: Set Knights Staff app icon
         run: |
           python3 - <<'PY'
@@ -38,7 +69,6 @@ jobs:
           marker = '<meta name="viewport" content="width=device-width,initial-scale=1">'
           tags = marker + '<meta name="theme-color" content="#171716"><link rel="manifest" href="./staff-manifest.json"><link rel="icon" type="image/svg+xml" href="./logo-exact.svg"><link rel="apple-touch-icon" href="./logo-exact.svg">'
           s = s.replace(marker, tags, 1)
-          p.write_text(s, encoding='utf-8')
           manifest = '''{
             "name": "Knights Staff",
             "short_name": "Knights Staff",
@@ -53,7 +83,6 @@ jobs:
           }'''
           Path('staff-manifest.json').write_text(manifest, encoding='utf-8')
           PY
-      # Force a fresh GitHub Pages deployment so main is definitely live.
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
