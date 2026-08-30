@@ -1,0 +1,36 @@
+name: Update Knights Staff logo metadata
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'manifest.json'
+permissions:
+  contents: write
+jobs:
+  update:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add app logo metadata
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('staffing.html')
+          s = p.read_text()
+          marker = '<meta name="viewport" content="width=device-width,initial-scale=1">'
+          additions = '<link rel="icon" href="logo-exact.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="logo.png"><link rel="manifest" href="manifest.json"><meta name="theme-color" content="#171716">'
+          if 'rel="manifest" href="manifest.json"' not in s:
+              if marker not in s:
+                  raise SystemExit('viewport marker not found')
+              s = s.replace(marker, marker + additions, 1)
+              p.write_text(s)
+          PY
+      - name: Commit logo metadata
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add staffing.html
+          git diff --cached --quiet || git commit -m "Set Knights Mobile Bars app logo [skip ci]"
+          git push
