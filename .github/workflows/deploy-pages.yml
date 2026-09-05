@@ -41,7 +41,22 @@ jobs:
             h.write_text(s,encoding='utf-8')
           PY
       - name: Inject live fixes
-        run: python3 -c "from pathlib import Path; p=Path('index.html'); s=p.read_text(encoding='utf-8'); import re; s=re.sub(r'<script src=\"fix-live.js\\?v=[^\"]+\"></script>','',s); s=re.sub(r'<script src=\"cleanup-ui.js\\?v=[^\"]+\"></script>','',s); s=re.sub(r'<script src=\"shift-status-fix.js\\?v=[^\"]+\"></script>','',s); s=s.replace('</body>','<script src=\"fix-live.js?v=16\"></script><script src=\"cleanup-ui.js?v=1\"></script><script src=\"shift-status-fix.js?v=1\"></script></body>'); p.write_text(s,encoding='utf-8')"
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('index.html'); s=p.read_text(encoding='utf-8')
+          s=re.sub(r'<script src="fix-live.js\?v=[^"]+"></script>','',s)
+          s=re.sub(r'<script src="cleanup-ui.js\?v=[^"]+"></script>','',s)
+          s=re.sub(r'<script src="shift-status-fix.js\?v=[^"]+"></script>','',s)
+          s=s.replace('</body>','<script src="fix-live.js?v=16"></script><script src="cleanup-ui.js?v=1"></script><script src="shift-status-fix.js?v=1"></script></body>')
+          p.write_text(s,encoding='utf-8')
+
+          h=Path('staffing.html'); s=h.read_text(encoding='utf-8')
+          s=re.sub(r'<script src="staff-event-notes.js\?v=[^"]+"></script>','',s)
+          s=s.replace('</body>','<script src="staff-event-notes.js?v=1"></script></body>')
+          h.write_text(s,encoding='utf-8')
+          PY
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
