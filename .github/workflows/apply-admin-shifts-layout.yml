@@ -1,0 +1,92 @@
+name: Apply Staff Admin Enhancements
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages-enhance"
+  cancel-in-progress: true
+
+jobs:
+  enhance-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Apply staffing enhancements
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('staffing.html')
+          s=p.read_text(encoding='utf-8')
+          marker='<!-- KNIGHTS_ADMIN_ENHANCEMENTS -->'
+          if marker not in s:
+              m=re.search(r"const URL='([^']+)',KEY='([^']+)'",s)
+              if not m: raise SystemExit('Supabase configuration not found')
+              url,key=m.group(1),m.group(2)
+              enhancement=f'''<!-- KNIGHTS_ADMIN_ENHANCEMENTS -->
+          <script>
+          (function(){{
+            const wait=()=>{{
+              if(!window.supabase||!document.getElementById('staffTab')) return setTimeout(wait,200);
+              const S=window.supabase.createClient({url!r},{key!r});
+              const $=id=>document.getElementById(id), esc=x=>String(x??'').replace(/[&<>"']/g,c=>({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}}[c]));
+              const fmtDate=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-GB',{{weekday:'short',day:'numeric',month:'short',year:'numeric'}}):'';
+              const tm=t=>t?t.slice(0,5):'—';
+              let admin=false,box;
+              function ensureBox(){{if(!box){{box=document.createElement('div');box.id='adminShiftContent';$('staffView').insertBefore(box,$('staffContent'));}}return box;}}
+              async function loadAdminShifts(){{
+                if(!admin)return; const b=ensureBox(); b.innerHTML='<div class="card">Loading shifts…</div>';
+                const [er,sr,pr]=await Promise.all([S.from('bar_events').select('*').gte('event_date',new Date().toISOString().slice(0,10)).order('event_date'),S.from('shift_signups').select('id,event_id,staff_id,status,created_at'),S.from('staff_profiles').select('id,full_name,email,registration_status,role').order('full_name')]);
+                if(er.error||sr.error||pr.error){{b.innerHTML='<div class="card"><p class="msg">Could not load shifts.</p></div>';return;}}
+                const events=er.data||[],signups=sr.data||[],people=pr.data||[],by=Object.fromEntries(people.map(x=>[x.id,x]));
+                if(!events.length){{b.innerHTML='<div class="card"><h2>Shifts</h2><p class="small">No upcoming events.</p></div>';return;}}
+                const personRow=s=>{{const p=by[s.staff_id],d=['declined','rejected','cancelled'].includes(s.status);return `<div class="signup-line"><div class="row"><span>${{esc(p?.full_name||'Unknown staff')}}</span><span class="badge ${{s.status==='confirmed'?'approved':d?'need':'pending'}}">${{d?'Declined':esc(s.status)}}</span></div>${{s.status==='pending'?`<div class="actions"><button class="btn mini green" onclick="knightsSetSignup('${{s.id}}','confirmed')">Accept request</button><button class="btn mini red" onclick="knightsSetSignup('${{s.id}}','declined')">Decline request</button></div>`:''}}${{d?`<div class="actions"><button class="btn mini green" onclick="knightsSetSignup('${{s.id}}','confirmed')">Accept / restore</button></div>`:''}}${{s.status==='confirmed'?`<button class="btn mini red" onclick="knightsSetSignup('${{s.id}}','declined')">Decline / remove</button>`:''}}</div>`}};
+                b.innerHTML='<div class="card"><h2>Shifts</h2><p class="small">All upcoming events and current staffing. Declined requests can be accepted again if you need them.</p></div>'+events.map(e=>{{const rows=signups.filter(x=>x.event_id===e.id),assigned=rows.filter(x=>x.status==='confirmed'),pending=rows.filter(x=>x.status==='pending'),declined=rows.filter(x=>['declined','rejected','cancelled'].includes(x.status)),needed=Math.max(0,Number(e.staff_required||0)-assigned.length),manager=people.find(p=>p.id===e.manager_id),available=people.filter(p=>p.role==='staff'&&p.registration_status==='approved'&&!rows.some(s=>s.staff_id===p.id));return `<div class="card"><div class="row"><div><div class="date">${{fmtDate(e.event_date)}}</div><div class="event">${{esc(e.event_name)}}</div></div><span class="badge ${{needed?'need':'approved'}}">${{needed?needed+' staff needed':'Fully staffed'}}</span></div><div class="meta">📍 ${{esc(e.venue)}}<br>🕐 Arrival ${{tm(e.arrival_time)}} · ${{tm(e.start_time)}}–${{tm(e.finish_time)}}<br>👥 ${{assigned.length}} / ${{e.staff_required}} staff</div><div class="manager">👑 Bar Manager: <b>${{esc(manager?.full_name||e.manager_name||'Not assigned')}}</b></div>${{e.bar_package?`<div class="small">Package: ${{esc(e.bar_package)}}</div>`:''}}${{e.dress_code?`<div class="small">Dress: ${{esc(e.dress_code)}}</div>`:''}}${{e.notes?`<div class="small">${{esc(e.notes)}}</div>`:''}}<div class="event-actions"><button class="btn gold" onclick="knightsOpenEdit('${{e.id}}')">Amend event</button><button class="btn red" onclick="knightsDeleteEvent('${{e.id}}')">Delete event</button></div>${{assigned.length?'<div class="small"><b>Confirmed staff</b></div>'+assigned.map(personRow).join(''):''}}${{pending.length?'<div class="small" style="margin-top:10px"><b>Pending requests</b></div>'+pending.map(personRow).join(''):''}}${{declined.length?'<div class="small" style="margin-top:10px"><b>Declined / previously requested</b></div>'+declined.map(personRow).join(''):''}}<div class="grid"><div><select id="knightsAdd_${{e.id}}"><option value="">Add approved staff…</option>${{available.map(p=>`<option value="${{p.id}}">${{esc(p.full_name)}}</option>`).join('')}}</select></div><div><button class="btn green" onclick="knightsAddStaff('${{e.id}}')">Add to shift</button></div></div></div>`}}).join('');
+              }}
+              window.knightsSetSignup=async(id,status)=>{{const r=await S.from('shift_signups').update({{status}}).eq('id',id);if(r.error)return alert(r.error.message);await loadAdminShifts()}};
+              window.knightsAddStaff=async eid=>{{const sid=$('knightsAdd_'+eid)?.value;if(!sid)return alert('Select a staff member first.');const r=await S.from('shift_signups').insert({{event_id:eid,staff_id:sid,status:'confirmed'}});if(r.error)return alert(r.error.code==='23505'?'That staff member is already on this shift.':r.error.message);await loadAdminShifts()}};
+              window.knightsDeleteEvent=async id=>{{if(!confirm('Delete this event? This will also remove all staff bookings for it.'))return;let r=await S.from('shift_signups').delete().eq('event_id',id);if(r.error)return alert(r.error.message);r=await S.from('bar_events').delete().eq('id',id);if(r.error)return alert(r.error.message);await loadAdminShifts()}};
+              window.knightsOpenEdit=id=>{{if(typeof window.openEdit==='function')window.openEdit(id);else alert('Use the Amend event controls on the Admin page.')}};
+              function wire(){{
+                $('staffTab').onclick=()=>{{$('staffTab').classList.add('active');$('adminTab').classList.remove('active');$('staffView').classList.remove('hidden');$('adminView').classList.add('hidden');if(admin){{$('staffGate').classList.add('hidden');$('staffContent').classList.add('hidden');ensureBox().classList.remove('hidden');loadAdminShifts();}}}};
+                $('adminTab').onclick=()=>{{$('adminTab').classList.add('active');$('staffTab').classList.remove('active');$('adminView').classList.remove('hidden');$('staffView').classList.add('hidden');if(admin)$('adminEvents').classList.add('hidden');}};
+              }}
+              async function init(){{const {{data}}=await S.auth.getSession();if(!data.session)return;const p=await S.from('staff_profiles').select('id,role').eq('id',data.session.user.id).maybeSingle();admin=p.data?.role==='admin';wire();if(admin){{$('adminEvents').classList.add('hidden');$('staffGate').classList.add('hidden');$('staffContent').classList.add('hidden');$('staffTab').click();}}}}
+              init();
+            }}; wait();
+          }})();
+          </script>
+          '''
+              s=s.replace('</body>',enhancement+'</body>')
+              p.write_text(s,encoding='utf-8')
+          PY
+      - name: Commit enhancement
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add staffing.html
+          git diff --cached --quiet || git commit -m "Fix admin shifts and restore declined requests"
+          git push
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Inject live fixes
+        run: python3 -c "from pathlib import Path; p=Path('index.html'); s=p.read_text(encoding='utf-8'); import re; s=re.sub(r'<script src=\"fix-live.js\\?v=[^\"]+\"></script>','',s); s=re.sub(r'<script src=\"cleanup-ui.js\\?v=[^\"]+\"></script>','',s); s=re.sub(r'<script src=\"shift-status-fix.js\\?v=[^\"]+\"></script>','',s); s=s.replace('</body>','<script src=\"fix-live.js?v=16\"></script><script src=\"cleanup-ui.js?v=1\"></script><script src=\"shift-status-fix.js?v=1\"></script></body>'); p.write_text(s,encoding='utf-8')"
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
