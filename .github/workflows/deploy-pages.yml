@@ -36,9 +36,9 @@ jobs:
           if not m: raise SystemExit('Supabase configuration not found')
           j=j.replace('__SUPA_URL__',m.group(1)).replace('__SUPA_KEY__',m.group(2))
           p.write_text(j,encoding='utf-8')
-          if 'admin-shifts.js?v=1' not in s:
-            s=s.replace('</body>','<script src="admin-shifts.js?v=1"></script></body>')
-            h.write_text(s,encoding='utf-8')
+          s=re.sub(r'<script src="admin-shifts\.js\?v=[^"]+"></script>','',s)
+          s=s.replace('</body>','<script src="admin-shifts.js?v=2"></script></body>')
+          h.write_text(s,encoding='utf-8')
           PY
       - name: Inject live fixes
         run: |
@@ -56,7 +56,7 @@ jobs:
           s=s.replace('e.dress_code','e.guest_count')
           s=s.replace('Dress: ${esc(e.guest_count)}','👥 Guest count: ${esc(e.guest_count)}')
           s=re.sub(r'<script src="staff-event-notes.js\?v=[^"]+"></script>','',s)
-          s=s.replace('</body>','<script src="staff-event-notes.js?v=1"></script></body>')
+          s=s.replace('</body>','<script src="staff-event-notes.js?v=2"></script></body>')
           h.write_text(s,encoding='utf-8')
           PY
       - name: Upload artifact
