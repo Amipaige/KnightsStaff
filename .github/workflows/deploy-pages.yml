@@ -25,8 +25,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v5
-      - name: Inject live Supabase fix
-        run: python3 -c "from pathlib import Path; p=Path('index.html'); s=p.read_text(encoding='utf-8'); import re; s=re.sub(r'<script src=\"fix-live.js\\?v=[^\"]+\"></script>','',s); s=s.replace('</body>','<script src=\"fix-live.js?v=14\"></script><script src=\"cleanup-ui.js?v=1\"></script></body>'); p.write_text(s,encoding='utf-8')"
+      - name: Inject live fixes
+        run: python3 -c "from pathlib import Path; p=Path('index.html'); s=p.read_text(encoding='utf-8'); import re; s=re.sub(r'<script src=\"fix-live.js\\?v=[^\"]+\"></script>','',s); s=re.sub(r'<script src=\"cleanup-ui.js\\?v=[^\"]+\"></script>','',s); s=re.sub(r'<script src=\"shift-status-fix.js\\?v=[^\"]+\"></script>','',s); s=s.replace('</body>','<script src=\"fix-live.js?v=14\"></script><script src=\"cleanup-ui.js?v=1\"></script><script src=\"shift-status-fix.js?v=1\"></script></body>'); p.write_text(s,encoding='utf-8')"
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
