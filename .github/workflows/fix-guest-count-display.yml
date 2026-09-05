@@ -1,0 +1,31 @@
+name: Fix guest count event display
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replace remaining dress code display
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('staffing.html')
+          s=p.read_text()
+          s=s.replace('e.dress_code', 'e.guest_count')
+          s=s.replace('Dress: ${esc(e.guest_count)}', '👥 Guest count: ${esc(e.guest_count)}')
+          p.write_text(s)
+          PY
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add staffing.html
+          git diff --cached --quiet || git commit -m "Fix guest count event display"
+          git push
