@@ -53,6 +53,8 @@ jobs:
           p.write_text(s,encoding='utf-8')
 
           h=Path('staffing.html'); s=h.read_text(encoding='utf-8')
+          s=s.replace('e.dress_code','e.guest_count')
+          s=s.replace('Dress: ${esc(e.guest_count)}','👥 Guest count: ${esc(e.guest_count)}')
           s=re.sub(r'<script src="staff-event-notes.js\?v=[^"]+"></script>','',s)
           s=s.replace('</body>','<script src="staff-event-notes.js?v=1"></script></body>')
           h.write_text(s,encoding='utf-8')
