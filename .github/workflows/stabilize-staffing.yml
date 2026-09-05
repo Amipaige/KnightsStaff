@@ -7,35 +7,37 @@ permissions:
   contents: write
 jobs:
   patch:
-    if: ${{ !contains(github.event.head_commit.message, '[staffing-inspect]') }}
+    if: ${{ !contains(github.event.head_commit.message, '[staffing-final]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect and patch assignment logic
+      - name: Fix declined staff rendering
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re
           p=Path('staffing.html')
           s=p.read_text(encoding='utf-8')
+
+          # Only confirmed signups count as assigned staff in admin/event totals.
           m=re.search(r'function activeSignups\(eventId\)\{.*?\}',s,re.S)
-          if m:
-              s=s[:m.start()] + "function activeSignups(eventId){return signups.filter(s=>s.event_id===eventId&&s.status==='confirmed')}" + s[m.end():]
-          else:
+          if not m:
               raise SystemExit('activeSignups function not found')
-          funcs=re.findall(r'function\s+([A-Za-z0-9_$]+)\s*\(',s)
-          print('RENDER FUNCTIONS:', [x for x in funcs if 'render' in x.lower() or 'status' in x.lower() or 'signup' in x.lower()])
-          for needle in ['REQUESTED','CONFIRMED','statusLabel','shift_signups']:
-              print('NEEDLE',needle,'COUNT',s.count(needle))
-          for m in re.finditer(r'.{0,300}REQUESTED.{0,500}',s):
-              print('REQUESTED SNIPPET:',m.group(0)[:900])
+          s=s[:m.start()] + "function activeSignups(eventId){return signups.filter(s=>s.event_id===eventId&&s.status==='confirmed')}" + s[m.end():]
+
+          old="${map[e.id]?(map[e.id]==='confirmed'?'CONFIRMED':'REQUESTED'):'I\\'M AVAILABLE'}"
+          new="${map[e.id]?(map[e.id]==='confirmed'?'CONFIRMED':(['declined','rejected','cancelled'].includes(map[e.id])?'Not required for this shift, thank you.':'REQUESTED')):'I\\'M AVAILABLE'}"
+          if old not in s:
+              raise SystemExit('Staff status button pattern not found')
+          s=s.replace(old,new,1)
+
           p.write_text(s,encoding='utf-8')
           PY
-      - name: Commit inspection patch
+      - name: Commit final fix
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add staffing.html
           git diff --cached --quiet && exit 0
-          git commit -m 'Patch assignment logic [staffing-inspect]'
+          git commit -m 'Fix declined staff status display [staffing-final]'
           git push
