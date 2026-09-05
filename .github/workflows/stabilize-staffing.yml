@@ -1,0 +1,48 @@
+name: Stabilize staffing app
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[staffing-stable]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch staffing logic
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('staffing.html')
+          s=p.read_text(encoding='utf-8')
+
+          # Declined/cancelled signups must never count as assigned staff.
+          m=re.search(r'function activeSignups\(eventId\)\{.*?\}',s,re.S)
+          if not m:
+              raise SystemExit('activeSignups function not found')
+          s=s[:m.start()] + "function activeSignups(eventId){return signups.filter(s=>s.event_id===eventId&&s.status==='confirmed')}" + s[m.end():]
+
+          # Make the user-facing status explicit for declined/rejected/cancelled requests.
+          m=re.search(r'function statusLabel\(s\)\{.*?\}',s,re.S)
+          if not m:
+              raise SystemExit('statusLabel function not found')
+          new_label="function statusLabel(s){if(['declined','rejected','cancelled'].includes(s))return 'Not required for this shift, thank you.';if(s==='confirmed')return 'CONFIRMED';return 'REQUESTED'}"
+          s=s[:m.start()] + new_label + s[m.end():]
+
+          # If the staff renderer uses a direct ternary for the button/status, make declined statuses non-requested.
+          s=s.replace("s.status==='confirmed'?'CONFIRMED':'REQUESTED'", "s.status==='confirmed'?'CONFIRMED':(['declined','rejected','cancelled'].includes(s.status)?'Not required for this shift, thank you.':'REQUESTED')")
+          s=s.replace("status==='confirmed'?'CONFIRMED':'REQUESTED'", "status==='confirmed'?'CONFIRMED':(['declined','rejected','cancelled'].includes(status)?'Not required for this shift, thank you.':'REQUESTED')")
+
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Commit stable fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add staffing.html
+          git diff --cached --quiet && exit 0
+          git commit -m 'Fix declined shift rendering and assignments [staffing-stable]'
+          git push
