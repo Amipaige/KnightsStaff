@@ -25,19 +25,15 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v5
-      - name: Prepare admin shifts script
+      - name: Prepare live scripts
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re
-          p=Path('admin-shifts.js'); j=p.read_text(encoding='utf-8')
           h=Path('staffing.html'); s=h.read_text(encoding='utf-8')
-          m=re.search(r"const URL='([^']+)',KEY='([^']+)'",s)
-          if not m: raise SystemExit('Supabase configuration not found')
-          j=j.replace('__SUPA_URL__',m.group(1)).replace('__SUPA_KEY__',m.group(2))
-          p.write_text(j,encoding='utf-8')
           s=re.sub(r'<script src="admin-shifts\.js\?v=[^"]+"></script>','',s)
-          s=s.replace('</body>','<script src="admin-shifts.js?v=2"></script></body>')
+          s=re.sub(r'<script src="staff-event-notes\.js\?v=[^"]+"></script>','',s)
+          s=s.replace('</body>','<script src="staff-event-notes.js?v=3"></script></body>')
           h.write_text(s,encoding='utf-8')
           PY
       - name: Inject live fixes
@@ -51,13 +47,6 @@ jobs:
           s=re.sub(r'<script src="shift-status-fix.js\?v=[^"]+"></script>','',s)
           s=s.replace('</body>','<script src="fix-live.js?v=16"></script><script src="cleanup-ui.js?v=1"></script><script src="shift-status-fix.js?v=1"></script></body>')
           p.write_text(s,encoding='utf-8')
-
-          h=Path('staffing.html'); s=h.read_text(encoding='utf-8')
-          s=s.replace('e.dress_code','e.guest_count')
-          s=s.replace('Dress: ${esc(e.guest_count)}','👥 Guest count: ${esc(e.guest_count)}')
-          s=re.sub(r'<script src="staff-event-notes.js\?v=[^"]+"></script>','',s)
-          s=s.replace('</body>','<script src="staff-event-notes.js?v=2"></script></body>')
-          h.write_text(s,encoding='utf-8')
           PY
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
