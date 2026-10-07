@@ -1,12 +1,15 @@
-# KnightsStock
-Stock check app
+# Knights Staff
 
-Parser update trigger.
+Knights Mobile Bars staffing and stock tools.
 
-Booker invoice parser and stock tabs fix.
+## Production files
 
-Deployment trigger: committed supplied Knights Mobile Bars logo and UI fixes.
+- `index.html` — GitHub Pages entry point; redirects to the staffing app.
+- `staffing.html` — canonical live staffing application.
+- `photo-stock-take.html` — stock-taking tool.
+- `supabase-schema.sql` — stock database schema reference.
+- `supabase-spirit-stock.sql` — spirit stock schema reference.
+- `manifest.json` and logo/favicon files — app assets.
 
-Auth redirect fix trigger.
-
-Auth redirect deployment retry.
+Legacy staffing prototypes and one-off patch scripts were removed on 7 October 2026.
+A pre-cleanup snapshot is preserved in branch `backup-pre-login-cleanup-2026-10-07`.
