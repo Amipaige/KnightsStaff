@@ -70,10 +70,49 @@ function renderDashboard(){
  }).join('')||'<p class="muted">Nothing outstanding.</p>';
 }
 function bookingCardMini(b){return '<div class="list-card"><div class="row"><div><div class="event-name">'+esc(b.event_name)+'</div><div class="meta">'+dmy(b.event_date)+' · '+esc(b.venue)+'</div></div><span class="bar-chip '+barClass(b.bar_type)+'">'+barLabel(b.bar_type)+'</span></div></div>'}
+function rawResponses(e){return e?.raw_payload?.responses&&typeof e.raw_payload.responses==='object'?e.raw_payload.responses:{}}
+function responseExact(e,...names){
+ const wanted=names.map(x=>String(x).toLowerCase().replace(/\s+/g,' ').trim());
+ for(const [k,v] of Object.entries(rawResponses(e))){
+   if(wanted.includes(String(k).toLowerCase().replace(/\s+/g,' ').trim()))return String(v??'').trim();
+ }
+ return '';
+}
+function timeFromResponse(value){
+ const m=String(value||'').match(/(?:^|\s)(\d{1,2}):(\d{2})(?::\d{2})?/);return m?String(m[1]).padStart(2,'0')+':'+m[2]:'';
+}
+function tensFromEnquiry(e){return /required|yes/i.test(responseExact(e,'Temporary Events notice requirements','TENS required'))}
+function requirementGroup(question){
+ const q=question.toLowerCase();
+ if(/name|email|phone/.test(q)&&!/venue contact/.test(q))return 'Customer';
+ if(/event|guest|date|bar close|opening time|entertainment/.test(q))return 'Event';
+ if(/bar design|drink|cocktail|paying/.test(q))return 'Bar & drinks';
+ if(/venue|setup|colour|theme/.test(q))return 'Venue & setup';
+ if(/temporary events|confirm|contract|terms/.test(q))return 'Compliance';
+ return 'Other';
+}
+function openEnquiryDetail(id){
+ const e=enquiries.find(x=>x.id===id);if(!e)return;
+ $('detailTitle').textContent=e.event_name||e.customer_name||'Enquiry';
+ $('detailSummary').innerHTML=[
+   ['Customer',e.customer_name||'—'],['Event date',dmy(e.event_date)],['Venue',e.venue||'TBC'],['Bar',barLabel(e.bar_type)],
+   ['Email',e.customer_email||'—'],['Phone',e.customer_phone||'—'],['Guests',e.guest_count||'—'],['Status',String(e.status||'').replaceAll('_',' ')]
+ ].map(x=>'<div class="summary-box"><span>'+esc(x[0])+'</span><b>'+esc(x[1])+'</b></div>').join('');
+ const responses=rawResponses(e),groups={};
+ Object.entries(responses).filter(([q,a])=>String(q).trim()&&String(a??'').trim()).forEach(([q,a])=>{const g=requirementGroup(q);(groups[g]??=[]).push([q,a])});
+ const order=['Customer','Event','Bar & drinks','Venue & setup','Compliance','Other'];
+ $('detailRequirements').innerHTML=order.filter(g=>groups[g]?.length).map(g=>'<section class="requirement-section"><h3>'+esc(g)+'</h3><div class="requirements-grid">'+groups[g].map(([q,a])=>'<div class="requirement-item '+(String(a).length>100?'wide':'')+'"><div class="q">'+esc(q)+'</div><div class="a">'+esc(a)+'</div></div>').join('')+'</div></section>').join('')+(e.notes?'<section class="requirement-section"><h3>Knights notes</h3><div class="requirement-item wide"><div class="a">'+esc(e.notes)+'</div></div></section>':'');
+ $('detailActions').innerHTML=e.status!=='accepted'&&e.status!=='declined'?'<button class="btn green" id="detailAcceptBtn">Record fee & accept booking</button><button class="btn red" id="detailDeclineBtn">Decline enquiry</button>':'<button class="btn primary" data-close-modal>Close</button>';
+ $('detailAcceptBtn')&&($('detailAcceptBtn').onclick=()=>{closeModals();openAccept(id)});
+ $('detailDeclineBtn')&&($('detailDeclineBtn').onclick=()=>{closeModals();declineEnquiry(id)});
+ openModal('enquiryDetailModal');
+}
 function renderEnquiries(){
- $('enquiryList').innerHTML=enquiries.length?enquiries.map(e=>'<div class="list-card"><div class="row"><div><div class="event-name">'+esc(e.event_name||e.customer_name)+'</div><div class="meta">'+esc(e.customer_name)+' · '+dmy(e.event_date)+' · '+esc(e.venue||'Venue TBC')+'<br>'+esc(e.guest_count||'—')+' guests · '+barLabel(e.bar_type)+'</div></div><span class="badge '+(e.status==='accepted'?'booked':'awaiting')+'">'+esc(e.status.replaceAll('_',' ')).toUpperCase()+'</span></div><div class="actions">'+(e.status!=='accepted'&&e.status!=='declined'?'<button class="btn green" data-accept="'+e.id+'">Record fee & accept</button><button class="btn red" data-decline="'+e.id+'">Decline</button>':'')+'</div></div>').join(''):'<p class="muted">No enquiries yet.</p>';
- document.querySelectorAll('[data-accept]').forEach(b=>b.onclick=()=>openAccept(b.dataset.accept));
- document.querySelectorAll('[data-decline]').forEach(b=>b.onclick=()=>declineEnquiry(b.dataset.decline));
+ $('enquiryList').innerHTML=enquiries.length?enquiries.map(e=>'<div class="list-card clickable" data-view-enquiry="'+e.id+'"><div class="row"><div><div class="event-name">'+esc(e.event_name||e.customer_name)+'</div><div class="meta">'+esc(e.customer_name)+' · '+dmy(e.event_date)+' · '+esc(e.venue||'Venue TBC')+'<br>'+esc(e.guest_count||'—')+' guests · '+barLabel(e.bar_type)+'</div><div class="source-tag">'+esc(e.source==='google_form'?'Google Form':'Manual')+'</div></div><span class="badge '+(e.status==='accepted'?'booked':'awaiting')+'">'+esc(e.status.replaceAll('_',' ')).toUpperCase()+'</span></div><div class="actions"><button class="btn primary" data-details="'+e.id+'">View requirements</button>'+(e.status!=='accepted'&&e.status!=='declined'?'<button class="btn green" data-accept="'+e.id+'">Record fee & accept</button><button class="btn red" data-decline="'+e.id+'">Decline</button>':'')+'</div></div>').join(''):'<p class="muted">No enquiries yet.</p>';
+ document.querySelectorAll('[data-details]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();openEnquiryDetail(b.dataset.details)});
+ document.querySelectorAll('[data-view-enquiry]').forEach(card=>card.onclick=()=>openEnquiryDetail(card.dataset.viewEnquiry));
+ document.querySelectorAll('[data-accept]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();openAccept(b.dataset.accept)});
+ document.querySelectorAll('[data-decline]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();declineEnquiry(b.dataset.decline)});
 }
 function renderBookings(){
  const sorted=[...bookings].sort((a,b)=>a.event_date.localeCompare(b.event_date));
@@ -103,34 +142,53 @@ async function saveEnquiry(){
  $('saveEnquiryBtn').disabled=true;$('enquiryMsg').textContent='Saving…';
  try{const r=await db.from('booking_enquiries').insert(payload);if(r.error)throw r.error;closeModals();await refreshAdminData()}catch(e){$('enquiryMsg').textContent=e.message}finally{$('saveEnquiryBtn').disabled=false}
 }
-function openAccept(id){const e=enquiries.find(x=>x.id===id);if(!e)return;$('acceptEnquiryId').value=id;$('acceptFee').value='50';$('acceptTotal').value='0';$('acceptStaff').value='3';$('acceptTens').checked=true;$('acceptMsg').textContent='';openModal('acceptModal')}
+function openAccept(id){
+ const e=enquiries.find(x=>x.id===id);if(!e)return;
+ $('acceptEnquiryId').value=id;
+ $('acceptEvent').value=e.event_name||'';
+ $('acceptDate').value=e.event_date||'';
+ $('acceptVenue').value=e.venue||'';
+ $('acceptGuests').value=e.guest_count||'';
+ $('acceptBar').value=e.bar_type||'pop_up';
+ $('acceptFee').value='50';$('acceptTotal').value='0';$('acceptStaff').value='3';
+ $('acceptMethod').value='Bank transfer';$('acceptReference').value='';
+ $('acceptArrival').value='';
+ $('acceptStart').value=timeFromResponse(responseExact(e,'Event Date & Bar opening time','Bar opening time'));
+ $('acceptFinish').value=timeFromResponse(responseExact(e,'Bar close'));
+ $('acceptTens').checked=tensFromEnquiry(e);
+ $('acceptMsg').textContent='';openModal('acceptModal')
+}
 async function declineEnquiry(id){if(!confirm('Decline this enquiry?'))return;const r=await db.from('booking_enquiries').update({status:'declined',updated_at:new Date().toISOString()}).eq('id',id);if(r.error)return alert(r.error.message);await refreshAdminData()}
 async function acceptBooking(){
  const id=$('acceptEnquiryId').value,e=enquiries.find(x=>x.id===id);if(!e)return;
- const fee=Number($('acceptFee').value||0);if(fee<=0)return $('acceptMsg').textContent='Record the booking fee paid before accepting.';
- if(!e.event_date||!e.venue||!e.event_name)return $('acceptMsg').textContent='Event name, date and venue are needed before accepting.';
- $('confirmAcceptBtn').disabled=true;$('acceptMsg').textContent='Creating booking…';
+ const fee=Number($('acceptFee').value||0);
+ const eventName=$('acceptEvent').value.trim(),eventDate=$('acceptDate').value,venue=$('acceptVenue').value.trim();
+ const guests=$('acceptGuests').value?Number($('acceptGuests').value):null,bar=$('acceptBar').value;
+ if(fee<=0)return $('acceptMsg').textContent='Record the booking fee paid before accepting.';
+ if(!eventName||!eventDate||!venue)return $('acceptMsg').textContent='Event name, date and venue are required.';
+ $('confirmAcceptBtn').disabled=true;$('acceptMsg').textContent='Creating booking and staffing event…';
  let eventId=null,bookingId=null;
  try{
-   const ev=await db.from('bar_events').insert({event_name:e.event_name,event_date:e.event_date,venue:e.venue,arrival_time:$('acceptArrival').value||null,start_time:$('acceptStart').value||null,finish_time:$('acceptFinish').value||null,staff_required:Number($('acceptStaff').value||1),bar_package:barLabel(e.bar_type),guest_count:e.guest_count,notes:e.notes}).select('id').single();
+   const staffRequired=Number($('acceptStaff').value||1),arrival=$('acceptArrival').value||null,start=$('acceptStart').value||null,finish=$('acceptFinish').value||null;
+   const ev=await db.from('bar_events').insert({event_name:eventName,event_date:eventDate,venue,arrival_time:arrival,start_time:start,finish_time:finish,staff_required:staffRequired,bar_package:barLabel(bar),guest_count:guests,notes:e.notes}).select('id').single();
    if(ev.error)throw ev.error;eventId=ev.data.id;
-   const br=await db.from('bookings').insert({enquiry_id:e.id,customer_name:e.customer_name,customer_email:e.customer_email,customer_phone:e.customer_phone,event_name:e.event_name,event_date:e.event_date,venue:e.venue,guest_count:e.guest_count,bar_type:e.bar_type,staff_required:Number($('acceptStaff').value||1),arrival_time:$('acceptArrival').value||null,start_time:$('acceptStart').value||null,finish_time:$('acceptFinish').value||null,total_amount:Number($('acceptTotal').value||0),booking_fee_due:fee,booking_status:'booked',tens_required:$('acceptTens').checked,staffing_event_id:eventId,notes:e.notes}).select('id').single();
+   const br=await db.from('bookings').insert({enquiry_id:e.id,customer_name:e.customer_name,customer_email:e.customer_email,customer_phone:e.customer_phone,event_name:eventName,event_date:eventDate,venue,guest_count:guests,bar_type:bar,staff_required:staffRequired,arrival_time:arrival,start_time:start,finish_time:finish,total_amount:Number($('acceptTotal').value||0),booking_fee_due:fee,booking_status:'booked',tens_required:$('acceptTens').checked,staffing_event_id:eventId,notes:e.notes,requirements:rawResponses(e)}).select('id').single();
    if(br.error)throw br.error;bookingId=br.data.id;
-   const pay=await db.from('booking_payments').insert({booking_id:bookingId,amount:fee,payment_type:'booking_fee',method:'recorded in Knights Hub'});
+   const pay=await db.from('booking_payments').insert({booking_id:bookingId,amount:fee,payment_type:'booking_fee',method:$('acceptMethod').value||null,reference:$('acceptReference').value.trim()||null});
    if(pay.error)throw pay.error;
-   const date=new Date(e.event_date+'T12:00:00'),six=new Date(date),fourteen=new Date(date);six.setDate(six.getDate()-42);fourteen.setDate(fourteen.getDate()-14);
+   const date=new Date(eventDate+'T12:00:00'),six=new Date(date),fourteen=new Date(date);six.setDate(six.getDate()-42);fourteen.setDate(fourteen.getDate()-14);
    const fmt=x=>[x.getFullYear(),String(x.getMonth()+1).padStart(2,'0'),String(x.getDate()).padStart(2,'0')].join('-');
    const tr=await db.from('booking_tasks').insert([
      {booking_id:bookingId,task_type:'six_week_check',title:($('acceptTens').checked?'Confirm payment & apply for TENS':'Confirm payment & event requirements'),due_date:fmt(six)},
      {booking_id:bookingId,task_type:'final_numbers',title:'Confirm final guest numbers',due_date:fmt(fourteen)}
    ]);
    if(tr.error)throw tr.error;
-   const er=await db.from('booking_enquiries').update({status:'accepted',updated_at:new Date().toISOString()}).eq('id',e.id);if(er.error)throw er.error;
+   const er=await db.from('booking_enquiries').update({status:'accepted',event_name:eventName,event_date:eventDate,venue,guest_count:guests,bar_type:bar,updated_at:new Date().toISOString()}).eq('id',e.id);if(er.error)throw er.error;
    closeModals();await refreshAdminData();switchView('bookings');
  }catch(err){
    $('acceptMsg').textContent=err.message||'Could not accept booking.';
    if(bookingId)await db.from('bookings').delete().eq('id',bookingId);
-   else if(eventId)await db.from('bar_events').delete().eq('id',eventId);
+   if(eventId)await db.from('bar_events').delete().eq('id',eventId);
  }finally{$('confirmAcceptBtn').disabled=false}
 }
 $('loginBtn').onclick=login;
