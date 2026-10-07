@@ -349,7 +349,7 @@ document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>switchView(b.data
 document.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>switchView(b.dataset.jump));
 $('mobileMenuBtn').onclick=()=>document.querySelector('.sidebar').classList.toggle('open');
 $('newEnquiryBtn').onclick=()=>{['eqCustomer','eqEmail','eqPhone','eqEvent','eqDate','eqVenue','eqGuests','eqNotes'].forEach(id=>$(id).value='');$('enquiryMsg').textContent='';openModal('enquiryModal')};
-$('saveEnquiryBtn').onclick=saveEnquiry;$('confirmAcceptBtn').onclick=acceptBooking;$('saveBookingBtn').onclick=saveBooking;$('addPaymentBtn').onclick=addPayment;$('cancelBookingBtn').onclick=()=>openCancelBooking($('editBookingId').value);$('confirmCancelBookingBtn').onclick=confirmCancelBooking;$('keepBookingBtn').onclick=closeModals;
+$('saveEnquiryBtn').onclick=saveEnquiry;$('confirmAcceptBtn').onclick=acceptBooking;$('saveBookingBtn').onclick=saveBooking;$('addPaymentBtn').onclick=addPayment;$('cancelBookingBtn').onclick=()=>openCancelBooking($('editBookingId').value);$('confirmCancelBookingBtn').onclick=confirmCancelBooking;$('keepBookingBtn').onclick=()=>$('cancelBookingModal').classList.add('hidden');
 document.querySelectorAll('[data-close-modal]').forEach(b=>b.onclick=closeModals);
 document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModals()}));
 $('prevMonth').onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()-1,1);renderCalendar()};
