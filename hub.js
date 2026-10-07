@@ -62,7 +62,7 @@ function renderDashboard(){
  const today=new Date().toISOString().slice(0,10);
  const future=bookings.filter(b=>b.event_date>=today&&b.booking_status!=='cancelled');
  const outstanding=bookings.reduce((sum,b)=>sum+Math.max(0,Number(b.total_amount||0)-totalPaid(b.id)),0);
- const openTasks=tasks.filter(t=>t.status==='open');
+ const openTasks=tasks.filter(t=>t.status==='open'&&bookings.some(b=>b.id===t.booking_id&&b.booking_status!=='cancelled'));
  const pendingEvents=future.filter(bookingHasPending);
  $('statUpcoming').textContent=future.length;
  $('statOutstanding').textContent=money(outstanding);
@@ -133,10 +133,11 @@ function renderEnquiries(){
 function renderBookings(){
  const sorted=[...bookings].sort((a,b)=>a.event_date.localeCompare(b.event_date));
  $('bookingList').innerHTML=sorted.length?sorted.map(b=>{
-   const paid=totalPaid(b.id),out=Math.max(0,Number(b.total_amount||0)-paid);
-   return '<div class="list-card clickable" data-booking="'+b.id+'"><div class="row"><div><div class="event-name">'+esc(b.customer_name)+'</div><div class="meta">'+dmy(b.event_date)+' · '+esc(b.venue)+'<br>'+esc(b.event_name)+' · '+esc(b.guest_count||'—')+' guests · '+barLabel(b.bar_type)+'</div></div><span class="badge booked">'+esc(b.booking_status.replaceAll('_',' ')).toUpperCase()+'</span></div><div class="booking-finance"><span>Paid <b>'+money(paid)+'</b></span><span>Outstanding <b class="'+(out>0?'balance-due':'balance-clear')+'">'+money(out)+'</b></span><span>Staff <b>'+esc(b.staff_required)+'</b></span></div><div class="actions"><button class="btn primary" data-edit-booking="'+b.id+'">Edit booking & payments</button></div></div>'
+   const paid=totalPaid(b.id),out=Math.max(0,Number(b.total_amount||0)-paid),cancelled=b.booking_status==='cancelled';
+   return '<div class="list-card clickable '+(cancelled?'cancelled-booking':'')+'" data-booking="'+b.id+'"><div class="row"><div><div class="event-name">'+esc(b.customer_name)+'</div><div class="meta">'+dmy(b.event_date)+' · '+esc(b.venue)+'<br>'+esc(b.event_name)+' · '+esc(b.guest_count||'—')+' guests · '+barLabel(b.bar_type)+'</div></div><span class="badge '+(cancelled?'overdue':'booked')+'">'+esc(b.booking_status.replaceAll('_',' ')).toUpperCase()+'</span></div><div class="booking-finance"><span>Paid <b>'+money(paid)+'</b></span><span>Outstanding <b class="'+(out>0?'balance-due':'balance-clear')+'">'+money(out)+'</b></span><span>Staff <b>'+esc(b.staff_required)+'</b></span></div><div class="actions"><button class="btn primary" data-edit-booking="'+b.id+'">Edit booking & payments</button>'+(cancelled?'':'<button class="btn red" data-cancel-booking="'+b.id+'">Cancel booking</button>')+'</div></div>'
  }).join(''):'<p class="muted">No accepted bookings yet.</p>';
  document.querySelectorAll('[data-edit-booking]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();openBooking(x.dataset.editBooking)});
+ document.querySelectorAll('[data-cancel-booking]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();openCancelBooking(x.dataset.cancelBooking)});
  document.querySelectorAll('[data-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.booking));
 }
 function renderCalendar(){
@@ -148,10 +149,13 @@ function renderCalendar(){
    const d=new Date(start);d.setDate(start.getDate()+i);
    const iso=[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
    const dayBookings=bookings.filter(b=>b.event_date===iso&&b.booking_status!=='cancelled');
-   html+='<div class="calendar-day '+(d.getMonth()!==m?'outside':'')+'"><div class="day-num">'+d.getDate()+'</div>'+dayBookings.map(b=>'<button class="cal-event '+barClass(b.bar_type)+'" data-calendar-booking="'+b.id+'" title="'+esc(b.customer_name)+' — '+esc(b.event_name)+'">'+esc(b.customer_name)+'</button>').join('')+'</div>';
+   const dayTasks=tasks.filter(t=>t.due_date===iso&&t.status==='open').filter(t=>bookings.some(b=>b.id===t.booking_id&&b.booking_status!=='cancelled'));
+   const taskIcons=dayTasks.map(t=>{const b=bookings.find(x=>x.id===t.booking_id);return '<button class="calendar-task-icon" data-task-booking="'+t.booking_id+'" title="'+esc((b?.customer_name||'Booking')+' — '+t.title)+'" aria-label="Task due">☑</button>'}).join('');
+   html+='<div class="calendar-day '+(d.getMonth()!==m?'outside':'')+'"><div class="calendar-day-head"><div class="day-num">'+d.getDate()+'</div><div class="calendar-task-icons">'+taskIcons+'</div></div>'+dayBookings.map(b=>'<button class="cal-event '+barClass(b.bar_type)+'" data-calendar-booking="'+b.id+'" title="'+esc(b.customer_name)+' — '+esc(b.event_name)+'">'+esc(b.customer_name)+'</button>').join('')+'</div>';
  }
  $('calendarGrid').innerHTML=html;
  document.querySelectorAll('[data-calendar-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.calendarBooking,true));
+ document.querySelectorAll('[data-task-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.taskBooking,true));
 }
 function requirementRows(obj){
  const entries=Object.entries(obj||{}).filter(([q,a])=>String(q).trim()&&String(a??'').trim());
@@ -201,11 +205,38 @@ function openBooking(id,showRequirements=false){
  $('editTens').checked=!!b.tens_required;$('editNotes').value=b.notes||'';
  $('paymentAmount').value='';$('paymentType').value='balance';$('paymentMethod').value='Bank transfer';$('paymentReference').value='';
  $('bookingEditMsg').textContent='';$('paymentMsg').textContent='';
+ $('cancelBookingBtn').classList.toggle('hidden',b.booking_status==='cancelled');
  refreshBookingBalance(b);renderPaymentHistory(id);renderEventChecklist(id);
  $('bookingRequirements').innerHTML=requirementRows(b.requirements);
  $('bookingRequirementsWrap').open=!!showRequirements;
  openModal('bookingModal');
  if(showRequirements)setTimeout(()=>$('bookingRequirementsWrap')?.scrollIntoView({behavior:'smooth',block:'start'}),120);
+}
+function openCancelBooking(id){
+ const b=bookings.find(x=>x.id===id);if(!b||b.booking_status==='cancelled')return;
+ $('cancelBookingId').value=id;
+ $('cancelBookingText').innerHTML='Cancel <b>'+esc(b.customer_name)+'</b> — '+esc(b.event_name)+' on '+dmy(b.event_date)+'?';
+ $('cancelBookingMsg').textContent='';
+ openModal('cancelBookingModal');
+}
+async function confirmCancelBooking(){
+ const id=$('cancelBookingId').value,b=bookings.find(x=>x.id===id);if(!b)return;
+ $('confirmCancelBookingBtn').disabled=true;$('cancelBookingMsg').textContent='Cancelling booking…';
+ let bookingChanged=false;
+ try{
+   const r=await db.from('bookings').update({booking_status:'cancelled',updated_at:new Date().toISOString()}).eq('id',id);
+   if(r.error)throw r.error;bookingChanged=true;
+   if(b.staffing_event_id){
+     const er=await db.from('bar_events').delete().eq('id',b.staffing_event_id);
+     if(er.error)throw er.error;
+   }
+   closeModals();
+   await refreshAdminData();
+   switchView('bookings');
+ }catch(e){
+   if(bookingChanged)await db.from('bookings').update({booking_status:b.booking_status,updated_at:new Date().toISOString()}).eq('id',id);
+   $('cancelBookingMsg').textContent=e.message||'Could not cancel booking.';
+ }finally{$('confirmCancelBookingBtn').disabled=false}
 }
 async function saveBooking(){
  const id=$('editBookingId').value,b=bookings.find(x=>x.id===id);if(!b)return;
@@ -318,7 +349,7 @@ document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>switchView(b.data
 document.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>switchView(b.dataset.jump));
 $('mobileMenuBtn').onclick=()=>document.querySelector('.sidebar').classList.toggle('open');
 $('newEnquiryBtn').onclick=()=>{['eqCustomer','eqEmail','eqPhone','eqEvent','eqDate','eqVenue','eqGuests','eqNotes'].forEach(id=>$(id).value='');$('enquiryMsg').textContent='';openModal('enquiryModal')};
-$('saveEnquiryBtn').onclick=saveEnquiry;$('confirmAcceptBtn').onclick=acceptBooking;$('saveBookingBtn').onclick=saveBooking;$('addPaymentBtn').onclick=addPayment;
+$('saveEnquiryBtn').onclick=saveEnquiry;$('confirmAcceptBtn').onclick=acceptBooking;$('saveBookingBtn').onclick=saveBooking;$('addPaymentBtn').onclick=addPayment;$('cancelBookingBtn').onclick=()=>openCancelBooking($('editBookingId').value);$('confirmCancelBookingBtn').onclick=confirmCancelBooking;$('keepBookingBtn').onclick=closeModals;
 document.querySelectorAll('[data-close-modal]').forEach(b=>b.onclick=closeModals);
 document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModals()}));
 $('prevMonth').onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()-1,1);renderCalendar()};
