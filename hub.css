@@ -14,4 +14,4 @@
 
 .checklist-row.task-focus{outline:3px solid #c98a2e;outline-offset:-3px;background:#fff8e8;transition:background .25s ease,outline .25s ease}
 
-.auth-divider{display:flex;align-items:center;gap:10px;margin:14px 0 10px;color:var(--muted);font-size:12px}.auth-divider:before,.auth-divider:after{content:"";height:1px;background:var(--line);flex:1}.auth-create-btn{display:block;text-align:center;text-decoration:none}.auth-create-note{text-align:center;margin-top:8px}
+.auth-divider{display:flex;align-items:center;gap:10px;margin:14px 0 10px;color:var(--muted);font-size:12px}.auth-divider:before,.auth-divider:after{content:"";height:1px;background:var(--line);flex:1}.btn.ghost.auth-create-btn{display:block;text-align:center;text-decoration:none;background:var(--gold);color:#fff;border:1px solid var(--gold);width:100%;margin-top:0;box-sizing:border-box}.btn.ghost.auth-create-btn:hover{filter:brightness(.96)}.auth-create-note{text-align:center;margin-top:8px}
