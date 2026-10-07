@@ -13,3 +13,5 @@
 .booking-action-row{display:flex;gap:10px;flex-wrap:wrap}.cancelled-booking{opacity:.7}.calendar-day-head{display:flex;justify-content:space-between;align-items:flex-start;gap:4px}.calendar-task-icons{display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end}.calendar-task-icon{width:21px;height:21px;border:0;border-radius:999px;background:#c98a2e;color:white;font-size:12px;font-weight:900;line-height:21px;padding:0;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.12)}.calendar-task-icon:hover{transform:translateY(-1px)}.confirm-modal{max-width:520px}.confirm-copy{font-size:17px;line-height:1.5;margin:14px 0}.confirm-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
 
 .checklist-row.task-focus{outline:3px solid #c98a2e;outline-offset:-3px;background:#fff8e8;transition:background .25s ease,outline .25s ease}
+
+.auth-divider{display:flex;align-items:center;gap:10px;margin:14px 0 10px;color:var(--muted);font-size:12px}.auth-divider:before,.auth-divider:after{content:"";height:1px;background:var(--line);flex:1}.auth-create-btn{display:block;text-align:center;text-decoration:none}.auth-create-note{text-align:center;margin-top:8px}
