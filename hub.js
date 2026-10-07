@@ -3,7 +3,7 @@ const URL='https://jpjrsndbjklecvwiuvbf.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwanJzbmRiamtsZWN2d2l1dmJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY1MzQ1MTQsImV4cCI6MjEwMjExMDUxNH0.KrNOCgc71pyc7vNgWdy9juQCz5PiEl0oIQ52QFv-9FE';
 const db=window.supabase.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const $=id=>document.getElementById(id);
-let me=null,profile=null,bookings=[],enquiries=[],payments=[],tasks=[],calendarCursor=new Date();
+let me=null,profile=null,bookings=[],enquiries=[],payments=[],tasks=[],checklistItems=[],calendarCursor=new Date();
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>'£'+Number(n||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
 const dmy=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
@@ -35,14 +35,15 @@ async function bootUser(user){
  if(profile.role==='admin'){await refreshAdminData();switchView('dashboard')}else{switchView('staffing')}
 }
 async function refreshAdminData(){
- const [b,e,p,t]=await Promise.all([
+ const [b,e,p,t,c]=await Promise.all([
    db.from('bookings').select('*').order('event_date',{ascending:true}),
    db.from('booking_enquiries').select('*').order('created_at',{ascending:false}),
    db.from('booking_payments').select('*').order('paid_at',{ascending:false}),
-   db.from('booking_tasks').select('*').order('due_date',{ascending:true})
+   db.from('booking_tasks').select('*').order('due_date',{ascending:true}),
+   db.from('booking_checklist_items').select('*').order('sort_order',{ascending:true})
  ]);
- for(const x of [b,e,p,t])if(x.error)throw x.error;
- bookings=b.data||[];enquiries=e.data||[];payments=p.data||[];tasks=t.data||[];
+ for(const x of [b,e,p,t,c])if(x.error)throw x.error;
+ bookings=b.data||[];enquiries=e.data||[];payments=p.data||[];tasks=t.data||[];checklistItems=c.data||[];
  renderDashboard();renderEnquiries();renderBookings();renderCalendar();
 }
 function totalPaid(bookingId){return payments.filter(p=>p.booking_id===bookingId).reduce((s,p)=>s+Number(p.amount||0),0)}
@@ -54,30 +55,36 @@ function switchView(name){
  if(name==='calendar')renderCalendar();
  if(window.innerWidth<901)document.querySelector('.sidebar')?.classList.remove('open');
 }
+function bookingHasPending(b){
+ return checklistItems.some(x=>x.booking_id===b.id&&!x.is_completed)||tasks.some(t=>t.booking_id===b.id&&t.status==='open');
+}
 function renderDashboard(){
  const today=new Date().toISOString().slice(0,10);
  const future=bookings.filter(b=>b.event_date>=today&&b.booking_status!=='cancelled');
  const outstanding=bookings.reduce((sum,b)=>sum+Math.max(0,Number(b.total_amount||0)-totalPaid(b.id)),0);
  const openTasks=tasks.filter(t=>t.status==='open');
+ const pendingEvents=future.filter(bookingHasPending);
  $('statUpcoming').textContent=future.length;
  $('statOutstanding').textContent=money(outstanding);
  $('statTasks').textContent=openTasks.length;
- $('statAwaitingFee').textContent=bookings.filter(b=>b.booking_status==='awaiting_booking_fee').length;
+ $('statPending').textContent=pendingEvents.length;
  $('dashboardEvents').innerHTML=future.slice(0,6).map(bookingCardMini).join('')||'<p class="muted">No upcoming bookings yet.</p>';
  $('dashboardTasks').innerHTML=openTasks.slice(0,8).map(t=>{
    const b=bookings.find(x=>x.id===t.booking_id);const overdue=t.due_date<today;
    return '<div class="list-card task-card"><label class="task-check"><input type="checkbox" data-complete-task="'+t.id+'"><span></span></label><div class="task-copy"><b>'+esc(t.title)+'</b><div class="meta"><strong>'+esc(b?.customer_name||'Unknown host')+'</strong>'+(b?.event_name?' · '+esc(b.event_name):'')+' · due '+dmy(t.due_date)+'</div></div><span class="badge '+(overdue?'overdue':'awaiting')+'">'+(overdue?'OVERDUE':'OPEN')+'</span></div>'
  }).join('')||'<p class="muted">Nothing outstanding.</p>';
- document.querySelectorAll('[data-complete-task]').forEach(x=>x.onchange=()=>completeTask(x.dataset.completeTask,x));
+ document.querySelectorAll('[data-complete-task]').forEach(x=>x.onchange=()=>setTaskCompleted(x.dataset.completeTask,true,x));
+ document.querySelectorAll('[data-dashboard-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.dashboardBooking,true));
 }
-async function completeTask(id,input){
- if(!input.checked)return;
- input.disabled=true;
- const r=await db.from('booking_tasks').update({status:'completed',completed_at:new Date().toISOString()}).eq('id',id);
- if(r.error){input.checked=false;input.disabled=false;return alert(r.error.message)}
+async function setTaskCompleted(id,isCompleted,input){
+ if(input)input.disabled=true;
+ const r=await db.from('booking_tasks').update({status:isCompleted?'completed':'open',completed_at:isCompleted?new Date().toISOString():null}).eq('id',id);
+ if(r.error){if(input){input.checked=!isCompleted;input.disabled=false}return alert(r.error.message)}
  await refreshAdminData();
+ const bookingId=tasks.find(t=>t.id===id)?.booking_id;
+ if(bookingId&&$('editBookingId')?.value===bookingId)renderEventChecklist(bookingId);
 }
-function bookingCardMini(b){return '<div class="list-card"><div class="row"><div><div class="event-name">'+esc(b.event_name)+'</div><div class="meta">'+dmy(b.event_date)+' · '+esc(b.venue)+'</div></div><span class="bar-chip '+barClass(b.bar_type)+'">'+barLabel(b.bar_type)+'</span></div></div>'}
+function bookingCardMini(b){return '<div class="list-card clickable" data-dashboard-booking="'+b.id+'"><div class="row"><div><div class="event-name">'+esc(b.customer_name)+'</div><div class="meta">'+dmy(b.event_date)+' · '+esc(b.venue)+(b.event_name?' · '+esc(b.event_name):'')+'</div></div><span class="bar-chip '+barClass(b.bar_type)+'">'+barLabel(b.bar_type)+'</span></div></div>'}
 function rawResponses(e){return e?.raw_payload?.responses&&typeof e.raw_payload.responses==='object'?e.raw_payload.responses:{}}
 function responseExact(e,...names){
  const wanted=names.map(x=>String(x).toLowerCase().replace(/\s+/g,' ').trim());
@@ -141,9 +148,10 @@ function renderCalendar(){
    const d=new Date(start);d.setDate(start.getDate()+i);
    const iso=[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
    const dayBookings=bookings.filter(b=>b.event_date===iso&&b.booking_status!=='cancelled');
-   html+='<div class="calendar-day '+(d.getMonth()!==m?'outside':'')+'"><div class="day-num">'+d.getDate()+'</div>'+dayBookings.map(b=>'<button class="cal-event '+barClass(b.bar_type)+'" title="'+esc(b.customer_name)+' — '+esc(b.event_name)+'">'+esc(b.customer_name)+'</button>').join('')+'</div>';
+   html+='<div class="calendar-day '+(d.getMonth()!==m?'outside':'')+'"><div class="day-num">'+d.getDate()+'</div>'+dayBookings.map(b=>'<button class="cal-event '+barClass(b.bar_type)+'" data-calendar-booking="'+b.id+'" title="'+esc(b.customer_name)+' — '+esc(b.event_name)+'">'+esc(b.customer_name)+'</button>').join('')+'</div>';
  }
  $('calendarGrid').innerHTML=html;
+ document.querySelectorAll('[data-calendar-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.calendarBooking,true));
 }
 function requirementRows(obj){
  const entries=Object.entries(obj||{}).filter(([q,a])=>String(q).trim()&&String(a??'').trim());
@@ -157,7 +165,33 @@ function refreshBookingBalance(b){
  const paid=totalPaid(b.id),out=Math.max(0,Number(b.total_amount||0)-paid);
  $('bookingBalanceSummary').innerHTML='<div><span>Total</span><b>'+money(b.total_amount)+'</b></div><div><span>Paid</span><b>'+money(paid)+'</b></div><div><span>Outstanding</span><b class="'+(out>0?'balance-due':'balance-clear')+'">'+money(out)+'</b></div>';
 }
-function openBooking(id){
+function renderEventChecklist(bookingId){
+ const standard=checklistItems.filter(x=>x.booking_id===bookingId).sort((a,b)=>a.sort_order-b.sort_order);
+ const dated=tasks.filter(t=>t.booking_id===bookingId).sort((a,b)=>String(a.due_date).localeCompare(String(b.due_date)));
+ const standardHtml=standard.map(x=>'<label class="checklist-row"><input type="checkbox" data-checklist-id="'+x.id+'" '+(x.is_completed?'checked':'')+'><span><b>'+esc(x.title)+'</b></span></label>').join('');
+ const taskHtml=dated.map(t=>'<label class="checklist-row dated"><input type="checkbox" data-task-toggle="'+t.id+'" '+(t.status==='completed'?'checked':'')+'><span><b>'+esc(t.title)+'</b><small>Due '+dmy(t.due_date)+(t.status==='completed'?' · completed':'')+'</small></span></label>').join('');
+ $('eventChecklist').innerHTML='<div class="checklist-group"><div class="checklist-label">Requirements</div>'+(standardHtml||'<p class="muted">No requirement checks.</p>')+'</div><div class="checklist-group"><div class="checklist-label">Dated actions</div>'+(taskHtml||'<p class="muted">No dated actions.</p>')+'</div>';
+ document.querySelectorAll('[data-checklist-id]').forEach(x=>x.onchange=()=>toggleChecklistItem(x.dataset.checklistId,x.checked,x));
+ document.querySelectorAll('[data-task-toggle]').forEach(x=>x.onchange=()=>setTaskCompleted(x.dataset.taskToggle,x.checked,x));
+}
+async function toggleChecklistItem(id,isCompleted,input){
+ input.disabled=true;
+ const r=await db.from('booking_checklist_items').update({is_completed:isCompleted,completed_at:isCompleted?new Date().toISOString():null,updated_at:new Date().toISOString()}).eq('id',id);
+ if(r.error){input.checked=!isCompleted;input.disabled=false;return alert(r.error.message)}
+ await refreshAdminData();
+ const item=checklistItems.find(x=>x.id===id);
+ if(item&&$('editBookingId')?.value===item.booking_id)renderEventChecklist(item.booking_id);
+}
+async function ensureChecklistForBooking(bookingId){
+ const rows=[
+   {booking_id:bookingId,item_key:'electric_confirmed',title:'Electric supply confirmed',sort_order:10},
+   {booking_id:bookingId,item_key:'water_confirmed',title:'Water supply confirmed',sort_order:20},
+   {booking_id:bookingId,item_key:'venue_access_confirmed',title:'Venue access / setup confirmed',sort_order:30}
+ ];
+ const r=await db.from('booking_checklist_items').upsert(rows,{onConflict:'booking_id,item_key'});
+ if(r.error)throw r.error;
+}
+function openBooking(id,showRequirements=false){
  const b=bookings.find(x=>x.id===id);if(!b)return;
  $('editBookingId').value=id;$('bookingModalTitle').textContent=b.customer_name||b.event_name;
  $('editCustomer').value=b.customer_name||'';$('editEmail').value=b.customer_email||'';$('editPhone').value=b.customer_phone||'';
@@ -167,10 +201,11 @@ function openBooking(id){
  $('editTens').checked=!!b.tens_required;$('editNotes').value=b.notes||'';
  $('paymentAmount').value='';$('paymentType').value='balance';$('paymentMethod').value='Bank transfer';$('paymentReference').value='';
  $('bookingEditMsg').textContent='';$('paymentMsg').textContent='';
- refreshBookingBalance(b);renderPaymentHistory(id);
+ refreshBookingBalance(b);renderPaymentHistory(id);renderEventChecklist(id);
  $('bookingRequirements').innerHTML=requirementRows(b.requirements);
- $('bookingRequirementsWrap').open=false;
+ $('bookingRequirementsWrap').open=!!showRequirements;
  openModal('bookingModal');
+ if(showRequirements)setTimeout(()=>$('bookingRequirementsWrap')?.scrollIntoView({behavior:'smooth',block:'start'}),120);
 }
 async function saveBooking(){
  const id=$('editBookingId').value,b=bookings.find(x=>x.id===id);if(!b)return;
@@ -185,6 +220,7 @@ async function saveBooking(){
  $('saveBookingBtn').disabled=true;$('bookingEditMsg').textContent='Saving…';
  try{
    const r=await db.from('bookings').update(payload).eq('id',id);if(r.error)throw r.error;
+   await ensureChecklistForBooking(id);
    if(b.staffing_event_id){
      const er=await db.from('bar_events').update({event_name:payload.event_name,event_date:payload.event_date,venue:payload.venue,guest_count:payload.guest_count,bar_package:barLabel(payload.bar_type),staff_required:payload.staff_required,arrival_time:payload.arrival_time,start_time:payload.start_time,finish_time:payload.finish_time,notes:payload.notes}).eq('id',b.staffing_event_id);
      if(er.error)throw er.error;
@@ -266,6 +302,7 @@ async function acceptBooking(){
      {booking_id:bookingId,task_type:'final_numbers',title:'Confirm final guest numbers',due_date:fmt(fourteen)}
    ]);
    if(tr.error)throw tr.error;
+   await ensureChecklistForBooking(bookingId);
    const er=await db.from('booking_enquiries').update({status:'accepted',event_name:eventName,event_date:eventDate,venue,guest_count:guests,bar_type:bar,updated_at:new Date().toISOString()}).eq('id',e.id);if(er.error)throw er.error;
    closeModals();await refreshAdminData();switchView('bookings');
  }catch(err){
