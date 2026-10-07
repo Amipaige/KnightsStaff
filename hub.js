@@ -63,11 +63,11 @@ function renderDashboard(){
  const future=bookings.filter(b=>b.event_date>=today&&b.booking_status!=='cancelled');
  const outstanding=bookings.reduce((sum,b)=>sum+Math.max(0,Number(b.total_amount||0)-totalPaid(b.id)),0);
  const openTasks=tasks.filter(t=>t.status==='open'&&bookings.some(b=>b.id===t.booking_id&&b.booking_status!=='cancelled'));
- const pendingEvents=future.filter(bookingHasPending);
+ const outstandingEnquiries=enquiries.filter(e=>e.status!=='accepted'&&e.status!=='declined');
  $('statUpcoming').textContent=future.length;
  $('statOutstanding').textContent=money(outstanding);
  $('statTasks').textContent=openTasks.length;
- $('statPending').textContent=pendingEvents.length;
+ $('statPending').textContent=outstandingEnquiries.length;
  $('dashboardEvents').innerHTML=future.slice(0,6).map(bookingCardMini).join('')||'<p class="muted">No upcoming bookings yet.</p>';
  $('dashboardTasks').innerHTML=openTasks.slice(0,8).map(t=>{
    const b=bookings.find(x=>x.id===t.booking_id);const overdue=t.due_date<today;
@@ -150,12 +150,12 @@ function renderCalendar(){
    const iso=[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
    const dayBookings=bookings.filter(b=>b.event_date===iso&&b.booking_status!=='cancelled');
    const dayTasks=tasks.filter(t=>t.due_date===iso&&t.status==='open').filter(t=>bookings.some(b=>b.id===t.booking_id&&b.booking_status!=='cancelled'));
-   const taskIcons=dayTasks.map(t=>{const b=bookings.find(x=>x.id===t.booking_id);return '<button class="calendar-task-icon" data-task-booking="'+t.booking_id+'" title="'+esc((b?.customer_name||'Booking')+' — '+t.title)+'" aria-label="Task due">☑</button>'}).join('');
+   const taskIcons=dayTasks.map(t=>{const b=bookings.find(x=>x.id===t.booking_id);return '<button class="calendar-task-icon" data-task-booking="'+t.booking_id+'" data-task-id="'+t.id+'" title="'+esc((b?.customer_name||'Booking')+' — '+t.title)+'" aria-label="Task due">☑</button>'}).join('');
    html+='<div class="calendar-day '+(d.getMonth()!==m?'outside':'')+'"><div class="calendar-day-head"><div class="day-num">'+d.getDate()+'</div><div class="calendar-task-icons">'+taskIcons+'</div></div>'+dayBookings.map(b=>'<button class="cal-event '+barClass(b.bar_type)+'" data-calendar-booking="'+b.id+'" title="'+esc(b.customer_name)+' — '+esc(b.event_name)+'">'+esc(b.customer_name)+'</button>').join('')+'</div>';
  }
  $('calendarGrid').innerHTML=html;
  document.querySelectorAll('[data-calendar-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.calendarBooking,true));
- document.querySelectorAll('[data-task-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.taskBooking,true));
+ document.querySelectorAll('[data-task-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.taskBooking,false,x.dataset.taskId));
 }
 function requirementRows(obj){
  const entries=Object.entries(obj||{}).filter(([q,a])=>String(q).trim()&&String(a??'').trim());
@@ -173,7 +173,7 @@ function renderEventChecklist(bookingId){
  const standard=checklistItems.filter(x=>x.booking_id===bookingId).sort((a,b)=>a.sort_order-b.sort_order);
  const dated=tasks.filter(t=>t.booking_id===bookingId).sort((a,b)=>String(a.due_date).localeCompare(String(b.due_date)));
  const standardHtml=standard.map(x=>'<label class="checklist-row"><input type="checkbox" data-checklist-id="'+x.id+'" '+(x.is_completed?'checked':'')+'><span><b>'+esc(x.title)+'</b></span></label>').join('');
- const taskHtml=dated.map(t=>'<label class="checklist-row dated"><input type="checkbox" data-task-toggle="'+t.id+'" '+(t.status==='completed'?'checked':'')+'><span><b>'+esc(t.title)+'</b><small>Due '+dmy(t.due_date)+(t.status==='completed'?' · completed':'')+'</small></span></label>').join('');
+ const taskHtml=dated.map(t=>'<label class="checklist-row dated" id="task-row-'+t.id+'"><input type="checkbox" data-task-toggle="'+t.id+'" '+(t.status==='completed'?'checked':'')+'><span><b>'+esc(t.title)+'</b><small>Due '+dmy(t.due_date)+(t.status==='completed'?' · completed':'')+'</small></span></label>').join('');
  $('eventChecklist').innerHTML='<div class="checklist-group"><div class="checklist-label">Requirements</div>'+(standardHtml||'<p class="muted">No requirement checks.</p>')+'</div><div class="checklist-group"><div class="checklist-label">Dated actions</div>'+(taskHtml||'<p class="muted">No dated actions.</p>')+'</div>';
  document.querySelectorAll('[data-checklist-id]').forEach(x=>x.onchange=()=>toggleChecklistItem(x.dataset.checklistId,x.checked,x));
  document.querySelectorAll('[data-task-toggle]').forEach(x=>x.onchange=()=>setTaskCompleted(x.dataset.taskToggle,x.checked,x));
@@ -195,7 +195,7 @@ async function ensureChecklistForBooking(bookingId){
  const r=await db.from('booking_checklist_items').upsert(rows,{onConflict:'booking_id,item_key'});
  if(r.error)throw r.error;
 }
-function openBooking(id,showRequirements=false){
+function openBooking(id,showRequirements=false,focusTaskId=null){
  const b=bookings.find(x=>x.id===id);if(!b)return;
  $('editBookingId').value=id;$('bookingModalTitle').textContent=b.customer_name||b.event_name;
  $('editCustomer').value=b.customer_name||'';$('editEmail').value=b.customer_email||'';$('editPhone').value=b.customer_phone||'';
@@ -210,7 +210,21 @@ function openBooking(id,showRequirements=false){
  $('bookingRequirements').innerHTML=requirementRows(b.requirements);
  $('bookingRequirementsWrap').open=!!showRequirements;
  openModal('bookingModal');
- if(showRequirements)setTimeout(()=>$('bookingRequirementsWrap')?.scrollIntoView({behavior:'smooth',block:'start'}),120);
+ if(focusTaskId){
+   setTimeout(()=>{
+     const row=$('task-row-'+focusTaskId);
+     if(row){
+       document.querySelectorAll('.checklist-row.task-focus').forEach(x=>x.classList.remove('task-focus'));
+       row.classList.add('task-focus');
+       row.scrollIntoView({behavior:'smooth',block:'center'});
+       setTimeout(()=>row.classList.remove('task-focus'),2400);
+     }else{
+       $('eventChecklist')?.scrollIntoView({behavior:'smooth',block:'start'});
+     }
+   },140);
+ }else if(showRequirements){
+   setTimeout(()=>$('bookingRequirementsWrap')?.scrollIntoView({behavior:'smooth',block:'start'}),120);
+ }
 }
 function openCancelBooking(id){
  const b=bookings.find(x=>x.id===id);if(!b||b.booking_status==='cancelled')return;
