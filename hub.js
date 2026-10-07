@@ -60,9 +60,14 @@ function bookingHasPending(b){
 }
 function renderDashboard(){
  const today=new Date().toISOString().slice(0,10);
+ const todayDate=new Date(today+'T12:00:00');
  const future=bookings.filter(b=>b.event_date>=today&&b.booking_status!=='cancelled');
- const outstanding=bookings.reduce((sum,b)=>sum+Math.max(0,Number(b.total_amount||0)-totalPaid(b.id)),0);
- const openTasks=tasks.filter(t=>t.status==='open'&&bookings.some(b=>b.id===t.booking_id&&b.booking_status!=='cancelled'));
+ const outstanding=bookings.filter(b=>b.booking_status!=='cancelled').reduce((sum,b)=>sum+Math.max(0,Number(b.total_amount||0)-totalPaid(b.id)),0);
+ const openTasks=tasks.filter(t=>{
+   if(t.status!=='open'||!bookings.some(b=>b.id===t.booking_id&&b.booking_status!=='cancelled'))return false;
+   const due=new Date(t.due_date+'T12:00:00'),showFrom=new Date(due);showFrom.setDate(showFrom.getDate()-14);
+   return todayDate>=showFrom;
+ });
  const outstandingEnquiries=enquiries.filter(e=>e.status!=='accepted'&&e.status!=='declined');
  $('statUpcoming').textContent=future.length;
  $('statOutstanding').textContent=money(outstanding);
@@ -131,7 +136,11 @@ function renderEnquiries(){
  document.querySelectorAll('[data-decline]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();declineEnquiry(b.dataset.decline)});
 }
 function renderBookings(){
- const sorted=[...bookings].sort((a,b)=>a.event_date.localeCompare(b.event_date));
+ const sorted=[...bookings].sort((a,b)=>{
+   const aCancelled=a.booking_status==='cancelled',bCancelled=b.booking_status==='cancelled';
+   if(aCancelled!==bCancelled)return aCancelled?1:-1;
+   return a.event_date.localeCompare(b.event_date);
+ });
  $('bookingList').innerHTML=sorted.length?sorted.map(b=>{
    const paid=totalPaid(b.id),out=Math.max(0,Number(b.total_amount||0)-paid),cancelled=b.booking_status==='cancelled';
    return '<div class="list-card clickable '+(cancelled?'cancelled-booking':'')+'" data-booking="'+b.id+'"><div class="row"><div><div class="event-name">'+esc(b.customer_name)+'</div><div class="meta">'+dmy(b.event_date)+' · '+esc(b.venue)+'<br>'+esc(b.event_name)+' · '+esc(b.guest_count||'—')+' guests · '+barLabel(b.bar_type)+'</div></div><span class="badge '+(cancelled?'overdue':'booked')+'">'+esc(b.booking_status.replaceAll('_',' ')).toUpperCase()+'</span></div><div class="booking-finance"><span>Paid <b>'+money(paid)+'</b></span><span>Outstanding <b class="'+(out>0?'balance-due':'balance-clear')+'">'+money(out)+'</b></span><span>Staff <b>'+esc(b.staff_required)+'</b></span></div><div class="actions"><button class="btn primary" data-edit-booking="'+b.id+'">Edit booking & payments</button>'+(cancelled?'':'<button class="btn red" data-cancel-booking="'+b.id+'">Cancel booking</button>')+'</div></div>'
