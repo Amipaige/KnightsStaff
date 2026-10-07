@@ -37,8 +37,8 @@ async function bootUser(user){
 async function refreshStaffingSummary(){
  const today=new Date().toISOString().slice(0,10);
  const [er,sr]=await Promise.all([
-   db.from('bar_events').select('id,event_date,staff_required,is_cancelled').eq('is_cancelled',false).gte('event_date',today),
-   db.from('shift_signups').select('id,event_id,status')
+   db.from('bar_events').select('id,event_date,staff_required,is_cancelled,manager_id').eq('is_cancelled',false).gte('event_date',today),
+   db.from('shift_signups').select('id,event_id,staff_id,status')
  ]);
  if(er.error)throw er.error;if(sr.error)throw sr.error;
  staffingEvents=er.data||[];staffingSignups=sr.data||[];
@@ -66,6 +66,7 @@ function switchView(name){
  if(name==='dashboard'&&profile?.role==='admin')refreshStaffingSummary().then(renderDashboard).catch(e=>console.warn('Staffing summary refresh:',e));
  if(window.innerWidth<901)document.querySelector('.sidebar')?.classList.remove('open');
 }
+function staffingFilledCount(e){const ids=new Set(staffingSignups.filter(s=>s.event_id===e.id&&s.status==='confirmed').map(s=>s.staff_id).filter(Boolean));if(e.manager_id)ids.add(e.manager_id);return ids.size}
 function bookingHasPending(b){
  return checklistItems.some(x=>x.booking_id===b.id&&!x.is_completed)||tasks.some(t=>t.booking_id===b.id&&t.status==='open');
 }
@@ -84,7 +85,7 @@ function renderDashboard(){
  const outstandingEnquiries=enquiries.filter(e=>e.status!=='accepted'&&e.status!=='declined');
  const activeStaffingIds=new Set(staffingEvents.map(e=>e.id));
  const staffingRequests=staffingSignups.filter(s=>s.status==='pending'&&activeStaffingIds.has(s.event_id)).length;
- const eventsNeedStaff=staffingEvents.filter(e=>staffingSignups.filter(s=>s.event_id===e.id&&s.status==='confirmed').length<Number(e.staff_required||0)).length;
+ const eventsNeedStaff=staffingEvents.filter(e=>staffingFilledCount(e)<Number(e.staff_required||0)).length;
  $('statUpcoming').textContent=allUpcoming.length;
  $('statOutstanding').textContent=money(outstanding);
  $('statTasks').textContent=allOpenTasks.length;
