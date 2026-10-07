@@ -180,6 +180,14 @@ function renderBookings(){
  document.querySelectorAll('[data-cancel-booking]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();openCancelBooking(x.dataset.cancelBooking)});
  document.querySelectorAll('[data-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.booking));
 }
+function bookingCapacityIssue(date,bar,excludeId=null){
+ const active=bookings.filter(b=>b.event_date===date&&b.booking_status!=='cancelled'&&b.id!==excludeId);
+ if(active.length>=3)return 'This date is full — maximum 3 bookings per day.';
+ const limit={luxury:1,pop_up:2,stock_and_staff:1}[bar];
+ const used=active.filter(b=>b.bar_type===bar).length;
+ if(limit&&used>=limit)return ({luxury:'Luxury Bar',pop_up:'Pop-Up Bar',stock_and_staff:'Stock & Staff'}[bar]||'Selected bar')+' is not available on this date.';
+ return '';
+}
 function renderCalendar(){
  const y=calendarCursor.getFullYear(),m=calendarCursor.getMonth();
  $('calendarTitle').textContent=calendarCursor.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
@@ -191,7 +199,8 @@ function renderCalendar(){
    const dayBookings=bookings.filter(b=>b.event_date===iso&&b.booking_status!=='cancelled');
    const dayTasks=tasks.filter(t=>t.due_date===iso&&t.status==='open').filter(t=>bookings.some(b=>b.id===t.booking_id&&b.booking_status!=='cancelled'));
    const taskIcons=dayTasks.map(t=>{const b=bookings.find(x=>x.id===t.booking_id);return '<button class="calendar-task-icon" data-task-booking="'+t.booking_id+'" data-task-id="'+t.id+'" title="'+esc((b?.customer_name||'Booking')+' — '+t.title)+'" aria-label="Task due">☑</button>'}).join('');
-   html+='<div class="calendar-day '+(d.getMonth()!==m?'outside':'')+'"><div class="calendar-day-head"><div class="day-num">'+d.getDate()+'</div><div class="calendar-task-icons">'+taskIcons+'</div></div>'+dayBookings.map(b=>'<button class="cal-event '+barClass(b.bar_type)+'" data-calendar-booking="'+b.id+'" title="'+esc(b.customer_name)+' — '+esc(b.event_name)+'">'+esc(b.customer_name)+'</button>').join('')+'</div>';
+   const availabilityDot=dayBookings.length?'<span class="availability-dot '+(dayBookings.length>=3?'full':dayBookings.length===2?'limited':'available')+'" title="'+dayBookings.length+' of 3 bookings used" aria-label="'+dayBookings.length+' of 3 bookings used"></span>':'';
+   html+='<div class="calendar-day '+(d.getMonth()!==m?'outside':'')+'"><div class="calendar-day-head"><div class="day-num">'+d.getDate()+availabilityDot+'</div><div class="calendar-task-icons">'+taskIcons+'</div></div>'+dayBookings.map(b=>'<button class="cal-event '+barClass(b.bar_type)+'" data-calendar-booking="'+b.id+'" title="'+esc(b.customer_name)+' — '+esc(b.event_name)+'">'+esc(b.customer_name)+'</button>').join('')+'</div>';
  }
  $('calendarGrid').innerHTML=html;
  document.querySelectorAll('[data-calendar-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.calendarBooking,true));
@@ -302,6 +311,7 @@ async function saveBooking(){
    tens_required:$('editTens').checked,notes:$('editNotes').value.trim()||null,updated_at:new Date().toISOString()
  };
  if(!payload.customer_name||!payload.event_name||!payload.event_date||!payload.venue)return $('bookingEditMsg').textContent='Host, event name, date and venue are required.';
+ const capacityIssue=bookingCapacityIssue(payload.event_date,payload.bar_type,id);if(capacityIssue)return $('bookingEditMsg').textContent=capacityIssue;
  $('saveBookingBtn').disabled=true;$('bookingEditMsg').textContent='Saving…';
  try{
    const r=await db.from('bookings').update(payload).eq('id',id);if(r.error)throw r.error;
@@ -370,6 +380,7 @@ async function acceptBooking(){
  const guests=$('acceptGuests').value?Number($('acceptGuests').value):null,bar=$('acceptBar').value;
  if(fee<=0)return $('acceptMsg').textContent='Record the booking fee paid before accepting.';
  if(!eventName||!eventDate||!venue)return $('acceptMsg').textContent='Event name, date and venue are required.';
+ const capacityIssue=bookingCapacityIssue(eventDate,bar);if(capacityIssue)return $('acceptMsg').textContent=capacityIssue;
  $('confirmAcceptBtn').disabled=true;$('acceptMsg').textContent='Creating booking and staffing event…';
  let eventId=null,bookingId=null;
  try{
