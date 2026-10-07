@@ -7,7 +7,7 @@
   <title>Knights Hub</title>
   <link rel="icon" href="logo-exact.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="logo.png">
-  <link rel="stylesheet" href="hub.css?v=20261007-10">
+  <link rel="stylesheet" href="hub.css?v=20261007-12">
 </head>
 <body>
   <div id="authScreen" class="auth-shell">
@@ -63,6 +63,8 @@
           <article class="stat-card"><span>Outstanding</span><strong id="statOutstanding">£0</strong></article>
           <article class="stat-card"><span>Open actions</span><strong id="statTasks">0</strong></article>
           <article class="stat-card"><span>Enquiries outstanding</span><strong id="statPending">0</strong></article>
+          <article class="stat-card stat-link" data-jump="staffing" role="button" tabindex="0"><span>Staffing requests</span><strong id="statStaffRequests">0</strong></article>
+          <article class="stat-card stat-link" data-jump="staffing" role="button" tabindex="0"><span>Events need staffing</span><strong id="statNeedStaff">0</strong></article>
         </div>
         <div class="two-col">
           <article class="panel">
@@ -116,7 +118,7 @@
 
       <section id="staffingView" class="view hidden">
         <div class="panel flush">
-          <iframe id="staffingFrame" title="Knights Staffing" src="staffing.html?v=20261007-5"></iframe>
+          <iframe id="staffingFrame" title="Knights Staffing" src="staffing.html?v=20261007-6"></iframe>
         </div>
       </section>
 
@@ -277,6 +279,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
-  <script src="hub.js?v=20261007-11"></script>
+  <script src="hub.js?v=20261007-12"></script>
 </body>
 </html>
