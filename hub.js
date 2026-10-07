@@ -73,10 +73,11 @@ function renderDashboard(){
  const today=new Date().toISOString().slice(0,10);
  const todayDate=new Date(today+'T12:00:00');
  const currentMonth=today.slice(0,7);
- const future=bookings.filter(b=>b.event_date>=today&&String(b.event_date||'').slice(0,7)===currentMonth&&b.booking_status!=='cancelled');
+ const allUpcoming=bookings.filter(b=>b.event_date>=today&&b.booking_status!=='cancelled');
+ const currentMonthUpcoming=allUpcoming.filter(b=>String(b.event_date||'').slice(0,7)===currentMonth);
  const outstanding=bookings.filter(b=>b.booking_status!=='cancelled').reduce((sum,b)=>sum+Math.max(0,Number(b.total_amount||0)-totalPaid(b.id)),0);
- const openTasks=tasks.filter(t=>{
-   if(t.status!=='open'||!bookings.some(b=>b.id===t.booking_id&&b.booking_status!=='cancelled'))return false;
+ const allOpenTasks=tasks.filter(t=>t.status==='open'&&bookings.some(b=>b.id===t.booking_id&&b.booking_status!=='cancelled'));
+ const openTasks=allOpenTasks.filter(t=>{
    const due=new Date(t.due_date+'T12:00:00'),showFrom=new Date(due);showFrom.setDate(showFrom.getDate()-14);
    return todayDate>=showFrom;
  });
@@ -84,13 +85,13 @@ function renderDashboard(){
  const activeStaffingIds=new Set(staffingEvents.map(e=>e.id));
  const staffingRequests=staffingSignups.filter(s=>s.status==='pending'&&activeStaffingIds.has(s.event_id)).length;
  const eventsNeedStaff=staffingEvents.filter(e=>staffingSignups.filter(s=>s.event_id===e.id&&s.status==='confirmed').length<Number(e.staff_required||0)).length;
- $('statUpcoming').textContent=future.length;
+ $('statUpcoming').textContent=allUpcoming.length;
  $('statOutstanding').textContent=money(outstanding);
- $('statTasks').textContent=openTasks.length;
+ $('statTasks').textContent=allOpenTasks.length;
  $('statPending').textContent=outstandingEnquiries.length;
  $('statStaffRequests').textContent=staffingRequests;
  $('statNeedStaff').textContent=eventsNeedStaff;
- $('dashboardEvents').innerHTML=future.map(bookingCardMini).join('')||'<p class="muted">No more bookings this month.</p>';
+ $('dashboardEvents').innerHTML=currentMonthUpcoming.map(bookingCardMini).join('')||'<p class="muted">No more bookings this month.</p>';
  $('dashboardTasks').innerHTML=openTasks.slice(0,8).map(t=>{
    const b=bookings.find(x=>x.id===t.booking_id);const overdue=t.due_date<today;
    return '<div class="list-card task-card"><label class="task-check"><input type="checkbox" data-complete-task="'+t.id+'"><span></span></label><div class="task-copy"><b>'+esc(t.title)+'</b><div class="meta"><strong>'+esc(b?.customer_name||'Unknown host')+'</strong>'+(b?.event_name?' · '+esc(b.event_name):'')+' · due '+dmy(t.due_date)+'</div></div><span class="badge '+(overdue?'overdue':'awaiting')+'">'+(overdue?'OVERDUE':'OPEN')+'</span></div>'
