@@ -66,8 +66,16 @@ function renderDashboard(){
  $('dashboardEvents').innerHTML=future.slice(0,6).map(bookingCardMini).join('')||'<p class="muted">No upcoming bookings yet.</p>';
  $('dashboardTasks').innerHTML=openTasks.slice(0,8).map(t=>{
    const b=bookings.find(x=>x.id===t.booking_id);const overdue=t.due_date<today;
-   return '<div class="list-card"><div class="row"><div><b>'+esc(t.title)+'</b><div class="meta">'+esc(b?.event_name||'Booking')+' · due '+dmy(t.due_date)+'</div></div><span class="badge '+(overdue?'overdue':'awaiting')+'">'+(overdue?'OVERDUE':'OPEN')+'</span></div></div>'
+   return '<div class="list-card task-card"><label class="task-check"><input type="checkbox" data-complete-task="'+t.id+'"><span></span></label><div class="task-copy"><b>'+esc(t.title)+'</b><div class="meta"><strong>'+esc(b?.customer_name||'Unknown host')+'</strong>'+(b?.event_name?' · '+esc(b.event_name):'')+' · due '+dmy(t.due_date)+'</div></div><span class="badge '+(overdue?'overdue':'awaiting')+'">'+(overdue?'OVERDUE':'OPEN')+'</span></div>'
  }).join('')||'<p class="muted">Nothing outstanding.</p>';
+ document.querySelectorAll('[data-complete-task]').forEach(x=>x.onchange=()=>completeTask(x.dataset.completeTask,x));
+}
+async function completeTask(id,input){
+ if(!input.checked)return;
+ input.disabled=true;
+ const r=await db.from('booking_tasks').update({status:'completed',completed_at:new Date().toISOString()}).eq('id',id);
+ if(r.error){input.checked=false;input.disabled=false;return alert(r.error.message)}
+ await refreshAdminData();
 }
 function bookingCardMini(b){return '<div class="list-card"><div class="row"><div><div class="event-name">'+esc(b.event_name)+'</div><div class="meta">'+dmy(b.event_date)+' · '+esc(b.venue)+'</div></div><span class="bar-chip '+barClass(b.bar_type)+'">'+barLabel(b.bar_type)+'</span></div></div>'}
 function rawResponses(e){return e?.raw_payload?.responses&&typeof e.raw_payload.responses==='object'?e.raw_payload.responses:{}}
@@ -108,7 +116,8 @@ function openEnquiryDetail(id){
  openModal('enquiryDetailModal');
 }
 function renderEnquiries(){
- $('enquiryList').innerHTML=enquiries.length?enquiries.map(e=>'<div class="list-card clickable" data-view-enquiry="'+e.id+'"><div class="row"><div><div class="event-name">'+esc(e.event_name||e.customer_name)+'</div><div class="meta">'+esc(e.customer_name)+' · '+dmy(e.event_date)+' · '+esc(e.venue||'Venue TBC')+'<br>'+esc(e.guest_count||'—')+' guests · '+barLabel(e.bar_type)+'</div><div class="source-tag">'+esc(e.source==='google_form'?'Google Form':'Manual')+'</div></div><span class="badge '+(e.status==='accepted'?'booked':'awaiting')+'">'+esc(e.status.replaceAll('_',' ')).toUpperCase()+'</span></div><div class="actions"><button class="btn primary" data-details="'+e.id+'">View requirements</button>'+(e.status!=='accepted'&&e.status!=='declined'?'<button class="btn green" data-accept="'+e.id+'">Record fee & accept</button><button class="btn red" data-decline="'+e.id+'">Decline</button>':'')+'</div></div>').join(''):'<p class="muted">No enquiries yet.</p>';
+ const visible=enquiries.filter(e=>e.status!=='accepted');
+ $('enquiryList').innerHTML=visible.length?visible.map(e=>'<div class="list-card clickable" data-view-enquiry="'+e.id+'"><div class="row"><div><div class="event-name">'+esc(e.event_name||e.customer_name)+'</div><div class="meta">'+esc(e.customer_name)+' · '+dmy(e.event_date)+' · '+esc(e.venue||'Venue TBC')+'<br>'+esc(e.guest_count||'—')+' guests · '+barLabel(e.bar_type)+'</div><div class="source-tag">'+esc(e.source==='google_form'?'Google Form':'Manual')+'</div></div><span class="badge '+(e.status==='declined'?'overdue':'awaiting')+'">'+esc(e.status.replaceAll('_',' ')).toUpperCase()+'</span></div><div class="actions"><button class="btn primary" data-details="'+e.id+'">View requirements</button>'+(e.status!=='declined'?'<button class="btn green" data-accept="'+e.id+'">Record fee & accept</button><button class="btn red" data-decline="'+e.id+'">Decline</button>':'')+'</div></div>').join(''):'<p class="muted">No open enquiries.</p>';
  document.querySelectorAll('[data-details]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();openEnquiryDetail(b.dataset.details)});
  document.querySelectorAll('[data-view-enquiry]').forEach(card=>card.onclick=()=>openEnquiryDetail(card.dataset.viewEnquiry));
  document.querySelectorAll('[data-accept]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();openAccept(b.dataset.accept)});
@@ -118,8 +127,10 @@ function renderBookings(){
  const sorted=[...bookings].sort((a,b)=>a.event_date.localeCompare(b.event_date));
  $('bookingList').innerHTML=sorted.length?sorted.map(b=>{
    const paid=totalPaid(b.id),out=Math.max(0,Number(b.total_amount||0)-paid);
-   return '<div class="list-card"><div class="row"><div><div class="event-name">'+esc(b.event_name)+'</div><div class="meta">'+dmy(b.event_date)+' · '+esc(b.venue)+'<br>'+esc(b.customer_name)+' · '+esc(b.guest_count||'—')+' guests · '+barLabel(b.bar_type)+'</div></div><span class="badge booked">'+esc(b.booking_status.replaceAll('_',' ')).toUpperCase()+'</span></div><div class="meta">Paid <b>'+money(paid)+'</b> · Outstanding <b>'+money(out)+'</b> · Staff '+esc(b.staff_required)+'</div></div>'
+   return '<div class="list-card clickable" data-booking="'+b.id+'"><div class="row"><div><div class="event-name">'+esc(b.customer_name)+'</div><div class="meta">'+dmy(b.event_date)+' · '+esc(b.venue)+'<br>'+esc(b.event_name)+' · '+esc(b.guest_count||'—')+' guests · '+barLabel(b.bar_type)+'</div></div><span class="badge booked">'+esc(b.booking_status.replaceAll('_',' ')).toUpperCase()+'</span></div><div class="booking-finance"><span>Paid <b>'+money(paid)+'</b></span><span>Outstanding <b class="'+(out>0?'balance-due':'balance-clear')+'">'+money(out)+'</b></span><span>Staff <b>'+esc(b.staff_required)+'</b></span></div><div class="actions"><button class="btn primary" data-edit-booking="'+b.id+'">Edit booking & payments</button></div></div>'
  }).join(''):'<p class="muted">No accepted bookings yet.</p>';
+ document.querySelectorAll('[data-edit-booking]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();openBooking(x.dataset.editBooking)});
+ document.querySelectorAll('[data-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.booking));
 }
 function renderCalendar(){
  const y=calendarCursor.getFullYear(),m=calendarCursor.getMonth();
@@ -130,9 +141,81 @@ function renderCalendar(){
    const d=new Date(start);d.setDate(start.getDate()+i);
    const iso=[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
    const dayBookings=bookings.filter(b=>b.event_date===iso&&b.booking_status!=='cancelled');
-   html+='<div class="calendar-day '+(d.getMonth()!==m?'outside':'')+'"><div class="day-num">'+d.getDate()+'</div>'+dayBookings.map(b=>'<button class="cal-event '+barClass(b.bar_type)+'" title="'+esc(b.event_name)+'">'+esc(b.event_name)+'</button>').join('')+'</div>';
+   html+='<div class="calendar-day '+(d.getMonth()!==m?'outside':'')+'"><div class="day-num">'+d.getDate()+'</div>'+dayBookings.map(b=>'<button class="cal-event '+barClass(b.bar_type)+'" title="'+esc(b.customer_name)+' — '+esc(b.event_name)+'">'+esc(b.customer_name)+'</button>').join('')+'</div>';
  }
  $('calendarGrid').innerHTML=html;
+}
+function requirementRows(obj){
+ const entries=Object.entries(obj||{}).filter(([q,a])=>String(q).trim()&&String(a??'').trim());
+ return entries.length?'<div class="requirements-grid">'+entries.map(([q,a])=>'<div class="requirement-item '+(String(a).length>100?'wide':'')+'"><div class="q">'+esc(q)+'</div><div class="a">'+esc(a)+'</div></div>').join('')+'</div>':'<p class="muted">No original form requirements stored.</p>';
+}
+function renderPaymentHistory(bookingId){
+ const list=payments.filter(p=>p.booking_id===bookingId).sort((a,b)=>new Date(b.paid_at)-new Date(a.paid_at));
+ $('paymentHistory').innerHTML=list.length?list.map(p=>'<div class="payment-row"><div><b>'+money(p.amount)+'</b><div class="meta">'+esc(String(p.payment_type||'other').replaceAll('_',' '))+' · '+esc(p.method||'Method not recorded')+(p.reference?' · '+esc(p.reference):'')+'</div></div><span class="meta">'+new Date(p.paid_at).toLocaleDateString('en-GB')+'</span></div>').join(''):'<p class="muted">No payments recorded yet.</p>';
+}
+function refreshBookingBalance(b){
+ const paid=totalPaid(b.id),out=Math.max(0,Number(b.total_amount||0)-paid);
+ $('bookingBalanceSummary').innerHTML='<div><span>Total</span><b>'+money(b.total_amount)+'</b></div><div><span>Paid</span><b>'+money(paid)+'</b></div><div><span>Outstanding</span><b class="'+(out>0?'balance-due':'balance-clear')+'">'+money(out)+'</b></div>';
+}
+function openBooking(id){
+ const b=bookings.find(x=>x.id===id);if(!b)return;
+ $('editBookingId').value=id;$('bookingModalTitle').textContent=b.customer_name||b.event_name;
+ $('editCustomer').value=b.customer_name||'';$('editEmail').value=b.customer_email||'';$('editPhone').value=b.customer_phone||'';
+ $('editEvent').value=b.event_name||'';$('editDate').value=b.event_date||'';$('editVenue').value=b.venue||'';$('editGuests').value=b.guest_count||'';
+ $('editBar').value=b.bar_type;$('editTotal').value=Number(b.total_amount||0);$('editStaff').value=b.staff_required||1;
+ $('editArrival').value=String(b.arrival_time||'').slice(0,5);$('editStart').value=String(b.start_time||'').slice(0,5);$('editFinish').value=String(b.finish_time||'').slice(0,5);
+ $('editTens').checked=!!b.tens_required;$('editNotes').value=b.notes||'';
+ $('paymentAmount').value='';$('paymentType').value='balance';$('paymentMethod').value='Bank transfer';$('paymentReference').value='';
+ $('bookingEditMsg').textContent='';$('paymentMsg').textContent='';
+ refreshBookingBalance(b);renderPaymentHistory(id);
+ $('bookingRequirements').innerHTML=requirementRows(b.requirements);
+ $('bookingRequirementsWrap').open=false;
+ openModal('bookingModal');
+}
+async function saveBooking(){
+ const id=$('editBookingId').value,b=bookings.find(x=>x.id===id);if(!b)return;
+ const payload={
+   customer_name:$('editCustomer').value.trim(),customer_email:$('editEmail').value.trim()||null,customer_phone:$('editPhone').value.trim()||null,
+   event_name:$('editEvent').value.trim(),event_date:$('editDate').value,venue:$('editVenue').value.trim(),
+   guest_count:$('editGuests').value?Number($('editGuests').value):null,bar_type:$('editBar').value,total_amount:Number($('editTotal').value||0),
+   staff_required:Number($('editStaff').value||1),arrival_time:$('editArrival').value||null,start_time:$('editStart').value||null,finish_time:$('editFinish').value||null,
+   tens_required:$('editTens').checked,notes:$('editNotes').value.trim()||null,updated_at:new Date().toISOString()
+ };
+ if(!payload.customer_name||!payload.event_name||!payload.event_date||!payload.venue)return $('bookingEditMsg').textContent='Host, event name, date and venue are required.';
+ $('saveBookingBtn').disabled=true;$('bookingEditMsg').textContent='Saving…';
+ try{
+   const r=await db.from('bookings').update(payload).eq('id',id);if(r.error)throw r.error;
+   if(b.staffing_event_id){
+     const er=await db.from('bar_events').update({event_name:payload.event_name,event_date:payload.event_date,venue:payload.venue,guest_count:payload.guest_count,bar_package:barLabel(payload.bar_type),staff_required:payload.staff_required,arrival_time:payload.arrival_time,start_time:payload.start_time,finish_time:payload.finish_time,notes:payload.notes}).eq('id',b.staffing_event_id);
+     if(er.error)throw er.error;
+   }
+   if(payload.event_date!==b.event_date){
+     const date=new Date(payload.event_date+'T12:00:00'),six=new Date(date),fourteen=new Date(date);six.setDate(six.getDate()-42);fourteen.setDate(fourteen.getDate()-14);
+     const fmt=x=>[x.getFullYear(),String(x.getMonth()+1).padStart(2,'0'),String(x.getDate()).padStart(2,'0')].join('-');
+     const [t1,t2]=await Promise.all([
+       db.from('booking_tasks').update({due_date:fmt(six)}).eq('booking_id',id).eq('task_type','six_week_check'),
+       db.from('booking_tasks').update({due_date:fmt(fourteen)}).eq('booking_id',id).eq('task_type','final_numbers')
+     ]);
+     if(t1.error)throw t1.error;if(t2.error)throw t2.error;
+   }
+   await refreshAdminData();
+   const updated=bookings.find(x=>x.id===id);if(updated){refreshBookingBalance(updated);renderPaymentHistory(id)}
+   $('bookingEditMsg').textContent='Saved.';
+ }catch(e){$('bookingEditMsg').textContent=e.message||'Could not save booking.'}
+ finally{$('saveBookingBtn').disabled=false}
+}
+async function addPayment(){
+ const id=$('editBookingId').value,b=bookings.find(x=>x.id===id);if(!b)return;
+ const amount=Number($('paymentAmount').value||0);if(amount<=0)return $('paymentMsg').textContent='Enter the payment amount received.';
+ $('addPaymentBtn').disabled=true;$('paymentMsg').textContent='Recording…';
+ try{
+   const r=await db.from('booking_payments').insert({booking_id:id,amount,payment_type:$('paymentType').value,method:$('paymentMethod').value||null,reference:$('paymentReference').value.trim()||null});
+   if(r.error)throw r.error;
+   await refreshAdminData();
+   const updated=bookings.find(x=>x.id===id);if(updated){refreshBookingBalance(updated);renderPaymentHistory(id)}
+   $('paymentAmount').value='';$('paymentReference').value='';$('paymentMsg').textContent='Payment recorded.';
+ }catch(e){$('paymentMsg').textContent=e.message||'Could not record payment.'}
+ finally{$('addPaymentBtn').disabled=false}
 }
 function openModal(id){$(id).classList.remove('hidden')}
 function closeModals(){document.querySelectorAll('.modal-bg').forEach(m=>m.classList.add('hidden'))}
@@ -198,7 +281,7 @@ document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>switchView(b.data
 document.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>switchView(b.dataset.jump));
 $('mobileMenuBtn').onclick=()=>document.querySelector('.sidebar').classList.toggle('open');
 $('newEnquiryBtn').onclick=()=>{['eqCustomer','eqEmail','eqPhone','eqEvent','eqDate','eqVenue','eqGuests','eqNotes'].forEach(id=>$(id).value='');$('enquiryMsg').textContent='';openModal('enquiryModal')};
-$('saveEnquiryBtn').onclick=saveEnquiry;$('confirmAcceptBtn').onclick=acceptBooking;
+$('saveEnquiryBtn').onclick=saveEnquiry;$('confirmAcceptBtn').onclick=acceptBooking;$('saveBookingBtn').onclick=saveBooking;$('addPaymentBtn').onclick=addPayment;
 document.querySelectorAll('[data-close-modal]').forEach(b=>b.onclick=closeModals);
 document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModals()}));
 $('prevMonth').onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()-1,1);renderCalendar()};
