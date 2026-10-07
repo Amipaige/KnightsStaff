@@ -76,7 +76,7 @@
       <section id="enquiriesView" class="view hidden">
         <div class="panel">
           <div class="panel-head">
-            <div><h2>Enquiries</h2><p class="muted">Google Form submissions will land here. Manual entry is available while we connect the form.</p></div>
+            <div><h2>Enquiries</h2><p class="muted">Google Form submissions appear here automatically. Open an enquiry to review all booking requirements.</p></div>
             <button id="newEnquiryBtn" class="btn primary compact">+ New enquiry</button>
           </div>
           <div id="enquiryList"></div>
@@ -145,21 +145,54 @@
     </div>
   </div>
 
+  <div id="enquiryDetailModal" class="modal-bg hidden">
+    <div class="modal wide-modal">
+      <div class="panel-head">
+        <div><div class="eyebrow">BOOKING REQUIREMENTS</div><h2 id="detailTitle">Enquiry</h2></div>
+        <button class="icon-btn" data-close-modal>×</button>
+      </div>
+      <div id="detailSummary" class="detail-summary"></div>
+      <div id="detailRequirements"></div>
+      <div id="detailActions" class="sticky-actions"></div>
+    </div>
+  </div>
+
   <div id="acceptModal" class="modal-bg hidden">
-    <div class="modal">
-      <div class="panel-head"><h2>Accept booking</h2><button class="icon-btn" data-close-modal>×</button></div>
+    <div class="modal wide-modal">
+      <div class="panel-head">
+        <div><div class="eyebrow">CONFIRM DETAILS</div><h2>Accept booking</h2></div>
+        <button class="icon-btn" data-close-modal>×</button>
+      </div>
       <input id="acceptEnquiryId" type="hidden">
-      <p class="muted">Record the booking fee and staffing details. This will create the confirmed booking and staffing event.</p>
+      <p class="muted">Check the event details, record the booking fee, then Knights Hub will create the booking, staffing event and reminder tasks.</p>
+
+      <h3>Event</h3>
+      <div class="form-grid">
+        <div><label>Event name</label><input id="acceptEvent"></div>
+        <div><label>Event date</label><input id="acceptDate" type="date"></div>
+        <div class="span-2"><label>Venue</label><input id="acceptVenue"></div>
+        <div><label>Guest count</label><input id="acceptGuests" type="number" min="1"></div>
+        <div><label>Bar type</label><select id="acceptBar"><option value="luxury">Luxury</option><option value="pop_up">Pop-up</option><option value="stock_and_staff">Stock & staff</option></select></div>
+      </div>
+
+      <h3>Payment</h3>
       <div class="form-grid">
         <div><label>Total event value</label><input id="acceptTotal" type="number" step="0.01" min="0" value="0"></div>
         <div><label>Booking fee paid</label><input id="acceptFee" type="number" step="0.01" min="0" value="50"></div>
+        <div><label>Payment method</label><select id="acceptMethod"><option>Bank transfer</option><option>Card</option><option>Cash</option><option>Other</option></select></div>
+        <div><label>Payment reference</label><input id="acceptReference" placeholder="Optional"></div>
+      </div>
+
+      <h3>Staffing & timings</h3>
+      <div class="form-grid">
         <div><label>Staff required</label><input id="acceptStaff" type="number" min="1" value="3"></div>
         <div><label>Staff arrival</label><input id="acceptArrival" type="time"></div>
         <div><label>Bar start</label><input id="acceptStart" type="time"></div>
         <div><label>Finish</label><input id="acceptFinish" type="time"></div>
       </div>
-      <label><input id="acceptTens" type="checkbox" class="check"> TENS required</label>
-      <button id="confirmAcceptBtn" class="btn primary">Accept & create event</button>
+
+      <label class="check-line"><input id="acceptTens" type="checkbox" class="check"> TENS required</label>
+      <button id="confirmAcceptBtn" class="btn primary">Accept booking & create staffing event</button>
       <p id="acceptMsg" class="msg"></p>
     </div>
   </div>
