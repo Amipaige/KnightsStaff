@@ -227,7 +227,7 @@ async function confirmCancelBooking(){
    const r=await db.from('bookings').update({booking_status:'cancelled',updated_at:new Date().toISOString()}).eq('id',id);
    if(r.error)throw r.error;bookingChanged=true;
    if(b.staffing_event_id){
-     const er=await db.from('bar_events').delete().eq('id',b.staffing_event_id);
+     const er=await db.from('bar_events').update({is_cancelled:true}).eq('id',b.staffing_event_id);
      if(er.error)throw er.error;
    }
    closeModals();
