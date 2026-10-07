@@ -3,7 +3,7 @@ const URL='https://jpjrsndbjklecvwiuvbf.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwanJzbmRiamtsZWN2d2l1dmJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY1MzQ1MTQsImV4cCI6MjEwMjExMDUxNH0.KrNOCgc71pyc7vNgWdy9juQCz5PiEl0oIQ52QFv-9FE';
 const db=window.supabase.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const $=id=>document.getElementById(id);
-let me=null,profile=null,bookings=[],enquiries=[],payments=[],tasks=[],checklistItems=[],calendarCursor=new Date();
+let me=null,profile=null,bookings=[],enquiries=[],payments=[],tasks=[],checklistItems=[],staffingEvents=[],staffingSignups=[],calendarCursor=new Date();
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>'£'+Number(n||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
 const dmy=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
@@ -34,6 +34,15 @@ async function bootUser(user){
  document.querySelectorAll('.admin-only').forEach(el=>el.classList.toggle('hidden',profile.role!=='admin'));
  if(profile.role==='admin'){await refreshAdminData();switchView('dashboard')}else{switchView('staffing')}
 }
+async function refreshStaffingSummary(){
+ const today=new Date().toISOString().slice(0,10);
+ const [er,sr]=await Promise.all([
+   db.from('bar_events').select('id,event_date,staff_required,is_cancelled').eq('is_cancelled',false).gte('event_date',today),
+   db.from('shift_signups').select('id,event_id,status')
+ ]);
+ if(er.error)throw er.error;if(sr.error)throw sr.error;
+ staffingEvents=er.data||[];staffingSignups=sr.data||[];
+}
 async function refreshAdminData(){
  const [b,e,p,t,c]=await Promise.all([
    db.from('bookings').select('*').order('event_date',{ascending:true}),
@@ -44,6 +53,7 @@ async function refreshAdminData(){
  ]);
  for(const x of [b,e,p,t,c])if(x.error)throw x.error;
  bookings=b.data||[];enquiries=e.data||[];payments=p.data||[];tasks=t.data||[];checklistItems=c.data||[];
+ await refreshStaffingSummary();
  renderDashboard();renderEnquiries();renderBookings();renderCalendar();
 }
 function totalPaid(bookingId){return payments.filter(p=>p.booking_id===bookingId).reduce((s,p)=>s+Number(p.amount||0),0)}
@@ -53,6 +63,7 @@ function switchView(name){
  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===name));
  $('viewTitle').textContent=({dashboard:'Dashboard',enquiries:'Enquiries',bookings:'Bookings',calendar:'Calendar',staffing:'Staffing',stock:'Stock'}[name]||'Knights Hub');
  if(name==='calendar')renderCalendar();
+ if(name==='dashboard'&&profile?.role==='admin')refreshStaffingSummary().then(renderDashboard).catch(e=>console.warn('Staffing summary refresh:',e));
  if(window.innerWidth<901)document.querySelector('.sidebar')?.classList.remove('open');
 }
 function bookingHasPending(b){
@@ -69,10 +80,15 @@ function renderDashboard(){
    return todayDate>=showFrom;
  });
  const outstandingEnquiries=enquiries.filter(e=>e.status!=='accepted'&&e.status!=='declined');
+ const activeStaffingIds=new Set(staffingEvents.map(e=>e.id));
+ const staffingRequests=staffingSignups.filter(s=>s.status==='pending'&&activeStaffingIds.has(s.event_id)).length;
+ const eventsNeedStaff=staffingEvents.filter(e=>staffingSignups.filter(s=>s.event_id===e.id&&s.status==='confirmed').length<Number(e.staff_required||0)).length;
  $('statUpcoming').textContent=future.length;
  $('statOutstanding').textContent=money(outstanding);
  $('statTasks').textContent=openTasks.length;
  $('statPending').textContent=outstandingEnquiries.length;
+ $('statStaffRequests').textContent=staffingRequests;
+ $('statNeedStaff').textContent=eventsNeedStaff;
  $('dashboardEvents').innerHTML=future.slice(0,6).map(bookingCardMini).join('')||'<p class="muted">No upcoming bookings yet.</p>';
  $('dashboardTasks').innerHTML=openTasks.slice(0,8).map(t=>{
    const b=bookings.find(x=>x.id===t.booking_id);const overdue=t.due_date<today;
@@ -369,7 +385,7 @@ $('loginBtn').onclick=login;
 $('loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
 $('logoutBtn').onclick=async()=>{await db.auth.signOut({scope:'local'});showAuth()};
 document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
-document.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>switchView(b.dataset.jump));
+document.querySelectorAll('[data-jump]').forEach(b=>{b.onclick=()=>switchView(b.dataset.jump);b.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();switchView(b.dataset.jump)}}});
 $('mobileMenuBtn').onclick=()=>document.querySelector('.sidebar').classList.toggle('open');
 $('newEnquiryBtn').onclick=()=>{['eqCustomer','eqEmail','eqPhone','eqEvent','eqDate','eqVenue','eqGuests','eqNotes'].forEach(id=>$(id).value='');$('enquiryMsg').textContent='';openModal('enquiryModal')};
 $('saveEnquiryBtn').onclick=saveEnquiry;$('confirmAcceptBtn').onclick=acceptBooking;$('saveBookingBtn').onclick=saveBooking;$('addPaymentBtn').onclick=addPayment;$('cancelBookingBtn').onclick=()=>openCancelBooking($('editBookingId').value);$('confirmCancelBookingBtn').onclick=confirmCancelBooking;$('keepBookingBtn').onclick=()=>$('cancelBookingModal').classList.add('hidden');
@@ -377,6 +393,17 @@ document.querySelectorAll('[data-close-modal]').forEach(b=>b.onclick=closeModals
 document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModals()}));
 $('prevMonth').onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()-1,1);renderCalendar()};
 $('nextMonth').onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()+1,1);renderCalendar()};
+window.addEventListener('message',e=>{
+ if(e.origin!==window.location.origin||!e.data)return;
+ if(e.data.type==='knights-open-booking'&&e.data.staffingEventId){
+   const b=bookings.find(x=>x.staffing_event_id===e.data.staffingEventId);
+   if(!b)return alert('This staffing event is not linked to a booking.');
+   switchView('bookings');openBooking(b.id,true);
+ }
+ if(e.data.type==='knights-staffing-changed'&&profile?.role==='admin'){
+   refreshStaffingSummary().then(renderDashboard).catch(err=>console.warn('Staffing summary refresh:',err));
+ }
+});
 db.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_OUT')showAuth();if(session?.user&&['INITIAL_SESSION','SIGNED_IN','TOKEN_REFRESHED'].includes(event))setTimeout(()=>{if(!me||me.id!==session.user.id)bootUser(session.user).catch(e=>showAuth(e.message))},0)});
 (async()=>{try{const {data,error}=await db.auth.getSession();if(error)throw error;if(data.session?.user)await bootUser(data.session.user);else showAuth()}catch(e){if(stale(e))await clearLocal();showAuth('Please sign in again.')}})();
 })();
