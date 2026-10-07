@@ -7,7 +7,7 @@
   <title>Knights Hub</title>
   <link rel="icon" href="logo-exact.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="logo.png">
-  <link rel="stylesheet" href="hub.css?v=20261007-3">
+  <link rel="stylesheet" href="hub.css?v=20261007-4">
 </head>
 <body>
   <div id="authScreen" class="auth-shell">
@@ -59,7 +59,7 @@
           <article class="stat-card"><span>Upcoming events</span><strong id="statUpcoming">0</strong></article>
           <article class="stat-card"><span>Outstanding</span><strong id="statOutstanding">£0</strong></article>
           <article class="stat-card"><span>Open actions</span><strong id="statTasks">0</strong></article>
-          <article class="stat-card"><span>Awaiting fee</span><strong id="statAwaitingFee">0</strong></article>
+          <article class="stat-card"><span>Events pending</span><strong id="statPending">0</strong></article>
         </div>
         <div class="two-col">
           <article class="panel">
@@ -207,6 +207,9 @@
 
       <div id="bookingBalanceSummary" class="balance-banner"></div>
 
+      <h3>Event checklist</h3>
+      <div id="eventChecklist" class="event-checklist"></div>
+
       <h3>Customer & event</h3>
       <div class="form-grid">
         <div><label>Host / customer name</label><input id="editCustomer"></div>
@@ -251,6 +254,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
-  <script src="hub.js?v=20261007-3"></script>
+  <script src="hub.js?v=20261007-4"></script>
 </body>
 </html>
