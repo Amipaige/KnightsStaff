@@ -7,7 +7,7 @@
   <title>Knights Hub</title>
   <link rel="icon" href="logo-exact.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="logo.png">
-  <link rel="stylesheet" href="hub.css?v=20261007-4">
+  <link rel="stylesheet" href="hub.css?v=20261007-5">
 </head>
 <body>
   <div id="authScreen" class="auth-shell">
@@ -232,7 +232,10 @@
       </div>
       <label class="check-line"><input id="editTens" type="checkbox" class="check"> TENS required</label>
       <label>Internal notes</label><textarea id="editNotes"></textarea>
-      <button id="saveBookingBtn" class="btn primary">Save booking changes</button>
+      <div class="booking-action-row">
+        <button id="saveBookingBtn" class="btn primary">Save booking changes</button>
+        <button id="cancelBookingBtn" class="btn red">Cancel booking</button>
+      </div>
       <p id="bookingEditMsg" class="msg"></p>
 
       <h3>Payments</h3>
@@ -253,7 +256,24 @@
     </div>
   </div>
 
+  <div id="cancelBookingModal" class="modal-bg hidden">
+    <div class="modal confirm-modal">
+      <div class="panel-head">
+        <div><div class="eyebrow">CANCEL BOOKING</div><h2>Are you sure?</h2></div>
+        <button class="icon-btn" data-close-modal>×</button>
+      </div>
+      <input id="cancelBookingId" type="hidden">
+      <p id="cancelBookingText" class="confirm-copy"></p>
+      <p class="muted">The booking and payment history will be kept for your records, but the event will be removed from the live calendar and staffing system.</p>
+      <div class="confirm-actions">
+        <button id="keepBookingBtn" class="btn ghost">Keep booking</button>
+        <button id="confirmCancelBookingBtn" class="btn red">Yes, cancel booking</button>
+      </div>
+      <p id="cancelBookingMsg" class="msg"></p>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
-  <script src="hub.js?v=20261007-4"></script>
+  <script src="hub.js?v=20261007-5"></script>
 </body>
 </html>
