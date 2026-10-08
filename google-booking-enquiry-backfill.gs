@@ -16,8 +16,8 @@ const KMB_BOOKING_ENQUIRY_URL =
   'https://jpjrsndbjklecvwiuvbf.supabase.co/functions/v1/google-form-booking';
 
 function importEventsRows105And106() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Events');
-  if (!sheet) throw new Error('Could not find a sheet named "Events".');
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  if (!sheet) throw new Error('Could not find the active sheet.');
 
   const secret = PropertiesService.getScriptProperties()
     .getProperty('KNIGHTS_WEBHOOK_SECRET');
