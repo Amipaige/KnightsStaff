@@ -43,6 +43,15 @@ async function refreshStaffingSummary(){
  if(er.error)throw er.error;if(sr.error)throw sr.error;
  staffingEvents=er.data||[];staffingSignups=sr.data||[];
 }
+async function refreshBackupStatus(){
+ const el=$('backupStatusNote');if(!el)return;
+ const r=await db.from('staffing_backup_status').select('last_success_at,last_export_at').eq('id',true).maybeSingle();
+ if(r.error){el.textContent='Last Google backup: status unavailable';return}
+ const stamp=r.data?.last_success_at||r.data?.last_export_at;
+ if(!stamp){el.textContent='Last Google backup: waiting for first sync';return}
+ const when=new Date(stamp).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+ el.textContent='Last Google backup: '+when;
+}
 async function refreshAdminData(){
  const [b,e,p,t,c]=await Promise.all([
    db.from('bookings').select('*').order('event_date',{ascending:true}),
@@ -53,7 +62,7 @@ async function refreshAdminData(){
  ]);
  for(const x of [b,e,p,t,c])if(x.error)throw x.error;
  bookings=b.data||[];enquiries=e.data||[];payments=p.data||[];tasks=t.data||[];checklistItems=c.data||[];
- await refreshStaffingSummary();
+ await Promise.all([refreshStaffingSummary(),refreshBackupStatus()]);
  renderDashboard();renderEnquiries();renderBookings();renderCalendar();
 }
 function totalPaid(bookingId){return payments.filter(p=>p.booking_id===bookingId).reduce((s,p)=>s+Number(p.amount||0),0)}
@@ -61,10 +70,10 @@ function switchView(name){
  document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
  const el=$(name+'View');if(el)el.classList.remove('hidden');
  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===name));
- $('viewTitle').textContent=({dashboard:'Dashboard',enquiries:'Enquiries',bookings:'Bookings',calendar:'Calendar',staffing:'Staffing',support:'Support',backup:'Backup',stock:'Stock'}[name]||'Knights Hub');
+ $('viewTitle').textContent=({dashboard:'Dashboard',enquiries:'Enquiries',bookings:'Bookings',calendar:'Calendar',staffing:'Staffing',support:'Support',stock:'Stock'}[name]||'Knights Hub');
  if(name==='calendar')renderCalendar();
  if(name==='support')loadSupportTickets().catch(e=>{$('supportMsg').textContent=e.message||'Could not load support tickets.'});
- if(name==='dashboard'&&profile?.role==='admin')refreshStaffingSummary().then(renderDashboard).catch(e=>console.warn('Staffing summary refresh:',e));
+ if(name==='dashboard'&&profile?.role==='admin')Promise.all([refreshStaffingSummary(),refreshBackupStatus()]).then(renderDashboard).catch(e=>console.warn('Dashboard refresh:',e));
  if(window.innerWidth<901)document.querySelector('.sidebar')?.classList.remove('open');
 }
 function staffingFilledCount(e){const ids=new Set(staffingSignups.filter(s=>s.event_id===e.id&&s.status==='confirmed').map(s=>s.staff_id).filter(Boolean));if(e.manager_id)ids.add(e.manager_id);return ids.size}
@@ -336,32 +345,6 @@ async function saveBooking(){
  }catch(e){$('bookingEditMsg').textContent=e.message||'Could not save booking.'}
  finally{$('saveBookingBtn').disabled=false}
 }
-async function copyToClipboard(text){
- if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(text);return}
- const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.focus();ta.select();document.execCommand('copy');ta.remove();
-}
-async function copyBackupScript(){
- $('backupMsg').textContent='Loading Apps Script…';
- try{
-   const r=await fetch('google-sheet-backup.gs?v=20261008-1',{cache:'no-store'});
-   if(!r.ok)throw new Error('Could not load the backup script.');
-   const script=await r.text();
-   await copyToClipboard(script);
-   $('backupMsg').textContent='Apps Script copied. Paste it into Extensions → Apps Script in your Google Sheet.';
- }catch(e){$('backupMsg').textContent=e.message||'Could not copy the Apps Script.'}
-}
-async function copyBackupKey(){
- $('copyBackupKeyBtn').disabled=true;$('backupMsg').textContent='Getting private backup key…';
- try{
-   const {data:{session},error}=await db.auth.getSession();if(error)throw error;
-   if(!session?.access_token)throw new Error('Your admin session has expired. Please sign in again.');
-   const r=await fetch(URL+'/functions/v1/staffing-backup-export',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':KEY},body:JSON.stringify({action:'get_setup_key'})});
-   const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.error||'Could not get the backup key.');
-   await copyToClipboard(body.backup_key);
-   $('backupMsg').textContent='Private backup key copied. Paste it when setupKnightsBackup asks for it.';
- }catch(e){$('backupMsg').textContent=e.message||'Could not copy the backup key.'}
- finally{$('copyBackupKeyBtn').disabled=false}
-}
 function supportCategoryLabel(x){return ({app_issue:'App issue',login:'Login',staffing:'Staffing',bookings:'Bookings',stock:'Stock',other:'Other'}[x]||x||'Other')}
 function supportStatusLabel(x){return String(x||'open').replaceAll('_',' ')}
 async function loadSupportTickets(){
@@ -473,8 +456,6 @@ async function acceptBooking(){
    if(eventId)await db.from('bar_events').delete().eq('id',eventId);
  }finally{$('confirmAcceptBtn').disabled=false}
 }
-$('copyBackupScriptBtn').onclick=copyBackupScript;
-$('copyBackupKeyBtn').onclick=copyBackupKey;
 $('supportSubmitBtn').onclick=submitSupportTicket;
 $('loginBtn').onclick=login;
 $('loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
