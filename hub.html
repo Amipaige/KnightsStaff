@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="KMB.Hub">
-  <link rel="stylesheet" href="hub.css?v=20261008-4">
+  <link rel="stylesheet" href="hub.css?v=20261008-5">
 </head>
 <body>
   <div id="authScreen" class="auth-shell">
@@ -131,13 +131,29 @@
       </section>
 
       <section id="teamView" class="view hidden">
+        <div class="stat-grid team-stats">
+          <article class="stat-card"><span>Active team</span><strong id="teamActiveCount">0</strong></article>
+          <article class="stat-card"><span>Awaiting approval</span><strong id="teamPendingCount">0</strong></article>
+          <article id="teamShiftRequestsCard" class="stat-card stat-link" role="button" tabindex="0"><span>Pending shift requests</span><strong id="teamShiftRequestCount">0</strong></article>
+        </div>
+
         <div class="panel">
           <div class="panel-head">
             <div>
-              <h2>Team</h2>
-              <p class="muted">Admin-only staff directory synced from the New Starter information sheet.</p>
+              <h2>Staff approvals</h2>
+              <p class="muted">Check the New Starter information, then approve the account here.</p>
             </div>
             <a class="btn gold compact" href="https://docs.google.com/spreadsheets/d/1NtoPiGTsB2nhCQNTT09XvCm_SZ1dKSpcM8333efSyoY/edit?usp=sharing" target="_blank" rel="noopener" style="text-decoration:none">Staff information sheet</a>
+          </div>
+          <div id="teamApprovalList"><p class="muted">Loading approvals…</p></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Active team</h2>
+              <p class="muted">Contact details, KMB.Hub access and New Starter information.</p>
+            </div>
           </div>
           <div class="team-toolbar">
             <input id="teamSearch" type="search" placeholder="Search staff name, email or phone">
@@ -145,6 +161,12 @@
           </div>
           <div id="teamList"><p class="muted">Loading staff information…</p></div>
         </div>
+
+        <details class="panel former-team-panel">
+          <summary><span>Former staff</span><b id="formerTeamCount">0</b></summary>
+          <p class="muted">Archived staff are hidden from future staffing and cannot book shifts. Their historical records are retained.</p>
+          <div id="formerTeamList"><p class="muted">No former staff.</p></div>
+        </details>
       </section>
 
       <section id="supportView" class="view hidden">
@@ -183,6 +205,20 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <div id="teamPasswordModal" class="modal-bg hidden">
+    <div class="modal" style="max-width:520px">
+      <div class="panel-head"><div><div class="eyebrow">TEAM ACCESS</div><h2>Reset password</h2></div><button class="icon-btn" data-close-modal>×</button></div>
+      <p id="teamPasswordName" class="muted"></p>
+      <input id="teamPasswordUserId" type="hidden">
+      <label>New password</label>
+      <input id="teamNewPassword" type="password" minlength="8" autocomplete="new-password" placeholder="Minimum 8 characters">
+      <label>Confirm password</label>
+      <input id="teamConfirmPassword" type="password" minlength="8" autocomplete="new-password" placeholder="Type it again">
+      <button id="teamSavePasswordBtn" class="btn primary">Save new password</button>
+      <p id="teamPasswordMsg" class="msg"></p>
+    </div>
   </div>
 
   <div id="enquiryModal" class="modal-bg hidden">
@@ -333,6 +369,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
-  <script src="hub.js?v=20261008-6"></script>
+  <script src="hub.js?v=20261008-7"></script>
 </body>
 </html>
