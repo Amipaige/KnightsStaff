@@ -63,3 +63,5 @@
   .calendar-head-with-today{padding-right:68px}
   .calendar-head-with-today .calendar-today-btn{padding:6px 9px;font-size:11px}
 }
+
+.payment-due-icon{background:#fff3e5;border-color:#d7832f;color:#9a4d00;font-weight:800}
