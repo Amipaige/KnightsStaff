@@ -21,7 +21,7 @@ function syncNewStarterToKmb(e) {
 }
 
 function syncAllStaffInformation() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const sheet = findStaffResponseSheet_();
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return;
 
@@ -29,6 +29,20 @@ function syncAllStaffInformation() {
     syncStaffRow_(sheet, row);
     Utilities.sleep(100);
   }
+}
+
+function findStaffResponseSheet_() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = spreadsheet.getSheets();
+
+  for (const sheet of sheets) {
+    const lastColumn = sheet.getLastColumn();
+    if (!lastColumn) continue;
+    const headers = sheet.getRange(1, 1, 1, lastColumn).getDisplayValues()[0];
+    if (headers.some(header => /email/i.test(String(header || '')))) return sheet;
+  }
+
+  throw new Error('Could not find a staff response sheet with an Email column.');
 }
 
 function syncStaffRow_(sheet, rowNumber) {
