@@ -687,7 +687,7 @@ async function acceptBooking(){
    const date=new Date(eventDate+'T12:00:00'),six=new Date(date),fourteen=new Date(date);six.setDate(six.getDate()-42);fourteen.setDate(fourteen.getDate()-14);
    const fmt=x=>[x.getFullYear(),String(x.getMonth()+1).padStart(2,'0'),String(x.getDate()).padStart(2,'0')].join('-');
    const tr=await db.from('booking_tasks').insert([
-     {booking_id:bookingId,task_type:'six_week_check',title:($('acceptTens').checked?'Confirm payment & apply for TENS':'Confirm payment & event requirements'),due_date:fmt(six)},
+     {booking_id:bookingId,task_type:'six_week_check',title:($('acceptTens').checked?'Confirm event requirements & apply for TENS':'Confirm event requirements'),due_date:fmt(six)},
      {booking_id:bookingId,task_type:'final_numbers',title:'Confirm final guest numbers',due_date:fmt(fourteen)}
    ]);
    if(tr.error)throw tr.error;
