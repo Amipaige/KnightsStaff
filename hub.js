@@ -220,9 +220,11 @@ function renderCalendar(){
    const taskIcons=dayTasks.map(t=>{const b=bookings.find(x=>x.id===t.booking_id);return '<button class="calendar-task-icon" data-task-booking="'+t.booking_id+'" data-task-id="'+t.id+'" title="'+esc((b?.customer_name||'Booking')+' — '+t.title)+'" aria-label="Task due">☑</button>'}).join('');
    const availabilityClass=dayBookings.length?(dayBookings.length>=3?'full':dayBookings.length===2?'limited':'available'):'';
    const availabilityLabel=dayBookings.length?dayBookings.length+' of 3 confirmed bookings used':'';
+   const now=new Date(),todayIso=[now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');
+   const isToday=iso===todayIso;
    const bookingHtml=dayBookings.map(b=>'<button class="cal-event '+barClass(b.bar_type)+'" data-calendar-booking="'+b.id+'" title="'+esc(b.customer_name)+' — '+esc(b.event_name)+'">'+esc(b.customer_name)+'</button>').join('');
    const enquiryHtml=dayEnquiries.map(e=>'<button class="cal-event enquiry" data-calendar-enquiry="'+e.id+'" title="Open enquiry — '+esc(e.customer_name)+' — '+esc(e.event_name||'Event')+'">? '+esc(e.customer_name||e.event_name||'Enquiry')+'</button>').join('');
-   html+='<div class="calendar-day '+(d.getMonth()!==m?'outside':'')+'"><div class="calendar-day-head"><div class="day-num '+availabilityClass+'" '+(availabilityLabel?'title="'+availabilityLabel+'" aria-label="'+availabilityLabel+'"':'')+'>'+d.getDate()+'</div><div class="calendar-task-icons">'+taskIcons+'</div></div>'+bookingHtml+enquiryHtml+'</div>';
+   html+='<div class="calendar-day '+(d.getMonth()!==m?'outside ':'')+(isToday?'today-cell':'')+'"><div class="calendar-day-head"><div class="day-num '+availabilityClass+' '+(isToday?'today':'')+'" '+(availabilityLabel?'title="'+availabilityLabel+'" aria-label="'+availabilityLabel+(isToday?' · Today':'')+'"':(isToday?'title="Today" aria-label="Today"':''))+'>'+d.getDate()+'</div><div class="calendar-task-icons">'+taskIcons+'</div></div>'+bookingHtml+enquiryHtml+'</div>';
  }
  $('calendarGrid').innerHTML=html;
  document.querySelectorAll('[data-calendar-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.calendarBooking,true));
