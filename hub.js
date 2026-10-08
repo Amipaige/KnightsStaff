@@ -447,7 +447,22 @@ function renderTeam(){
 }
 function requirementRows(obj){
  const entries=Object.entries(obj||{}).filter(([q,a])=>String(q).trim()&&String(a??'').trim());
- return entries.length?'<div class="requirements-grid">'+entries.map(([q,a])=>'<div class="requirement-item '+(String(a).length>100?'wide':'')+'"><div class="q">'+esc(q)+'</div><div class="a">'+esc(a)+'</div></div>').join('')+'</div>':'<p class="muted">No original form requirements stored.</p>';
+ if(!entries.length)return '<p class="muted">No original form requirements stored.</p>';
+ const groups={};
+ entries.forEach(([q,a])=>{const g=requirementGroup(q);(groups[g]??=[]).push([q,a])});
+ const order=['Customer','Event','Bar & drinks','Venue & setup','Compliance','Other'];
+ const questionOrder=[
+   /name/i,/email/i,/phone/i,
+   /event.*date|date.*event/i,/event.*type|type.*event/i,/guest/i,/opening time|bar opening/i,/bar close/i,/entertainment/i,
+   /paying|payment|cash bar|prepaid/i,/drink/i,/cocktail/i,/bar design/i,
+   /venue/i,/setup/i,/access/i,/colour|color/i,/theme/i,
+   /temporary events|tens/i,/confirm/i,/contract/i,/terms/i
+ ];
+ const rank=q=>{const i=questionOrder.findIndex(rx=>rx.test(String(q)));return i<0?999:i};
+ return order.filter(g=>groups[g]?.length).map(g=>{
+   const rows=[...groups[g]].sort((a,b)=>rank(a[0])-rank(b[0])||String(a[0]).localeCompare(String(b[0])));
+   return '<section class="requirement-section"><h3>'+esc(g)+'</h3><div class="requirements-grid">'+rows.map(([q,a])=>'<div class="requirement-item '+(String(a).length>100?'wide':'')+'"><div class="q">'+esc(q)+'</div><div class="a">'+esc(a)+'</div></div>').join('')+'</div></section>';
+ }).join('');
 }
 function renderPaymentHistory(bookingId){
  const list=payments.filter(p=>p.booking_id===bookingId).sort((a,b)=>new Date(b.paid_at)-new Date(a.paid_at));
