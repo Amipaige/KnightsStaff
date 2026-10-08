@@ -56,3 +56,10 @@
 .day-num.today{outline:3px solid #171716;outline-offset:2px;font-weight:800;position:relative}
 .day-num.today:after{content:"TODAY";position:absolute;top:30px;left:50%;transform:translateX(-50%);font:700 8px Arial,sans-serif;letter-spacing:.06em;color:#171716;white-space:nowrap}
 .calendar-day.today-cell .calendar-day-head{margin-bottom:9px}
+
+.calendar-head-with-today{position:relative;padding-right:76px}
+.calendar-head-with-today .calendar-today-btn{position:absolute;right:0;top:50%;transform:translateY(-50%);width:auto;margin:0;padding:7px 12px;font-size:12px}
+@media(max-width:600px){
+  .calendar-head-with-today{padding-right:68px}
+  .calendar-head-with-today .calendar-today-btn{padding:6px 9px;font-size:11px}
+}
