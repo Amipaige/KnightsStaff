@@ -268,8 +268,29 @@ async function inviteTeamMember(email,name){
 window.inviteTeamMember=inviteTeamMember;
 function staffInfoEntries(row){
  const raw=row?.raw_data&&typeof row.raw_data==='object'?row.raw_data:{};
- const common=/^(email|e-?mail|email address|full ?name|name|phone|mobile|telephone|contact number|timestamp|source_updated_at)$/i;
- return Object.entries(raw).filter(([k,v])=>!common.test(String(k).trim())&&String(v??'').trim());
+ const common=/^(email|e-?mail|email address|full ?name|name|first name\??|last name\??|phone number|phone|mobile|telephone|contact number|timestamp|source_updated_at|column \d+)$/i;
+ const entries=Object.entries(raw).filter(([k,v])=>!common.test(String(k).trim())&&String(v??'').trim());
+ const order=[
+   /^home address$/i,
+   /^date of birth$/i,
+   /^what is your sex\?$/i,
+   /^do you drive\?$/i,
+   /^emergency contact name$/i,
+   /^relationship$/i,
+   /^do you have cocktail experience\?$/i,
+   /^are you a personal licence holder\?$/i,
+   /^employee statement$/i,
+   /^if you have a student loan/i,
+   /^national insurance number$/i,
+   /^account name$/i,
+   /^bank name$/i,
+   /^sort code$/i,
+   /^account number$/i,
+   /^do you have any medical conditions/i,
+   /^once you have read the above/i
+ ];
+ const rank=k=>{const key=String(k).trim();const i=order.findIndex(rx=>rx.test(key));return i<0?999:i};
+ return entries.sort((a,b)=>rank(a[0])-rank(b[0])||String(a[0]).localeCompare(String(b[0])));
 }
 function isEmailValue(v){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v||'').trim())}
 function isPhoneValue(v){const x=String(v||'').trim();return /\d/.test(x)&&/^\+?[\d\s().-]{7,}$/.test(x)}
@@ -304,7 +325,7 @@ window.declineTeamStaff=declineTeamStaff;
 
 async function setTeamArchive(email,restore=false){
  const action=restore?'restore':'archive';
- if(!confirm((restore?'Restore ':'Move ')+email+(restore?' to the active team?':' to Former staff? Their history will be kept.')))return;
+ if(!confirm((restore?'Rehire ':'Move ')+email+(restore?' and return them to the active team?':' to Former staff? Their history will be kept.')))return;
  try{
    const {data:{session},error:sessionError}=await db.auth.getSession();if(sessionError)throw sessionError;
    if(!session?.access_token)throw new Error('Your admin session has expired. Please sign in again.');
@@ -313,8 +334,22 @@ async function setTeamArchive(email,restore=false){
    await refreshAdminData();
  }catch(e){alert(e.message||'Could not update this staff member.')}
 }
+async function permanentlyDeleteTeamMember(email){
+ if(!confirm('Permanently delete '+email+'? This cannot be undone and will remove their KMB.Hub account, staff profile, stored New Starter information and shift signup history.'))return;
+ const typed=prompt('Type DELETE to permanently remove this staff member.');
+ if(typed!=='DELETE')return;
+ try{
+   const {data:{session},error:sessionError}=await db.auth.getSession();if(sessionError)throw sessionError;
+   if(!session?.access_token)throw new Error('Your admin session has expired. Please sign in again.');
+   const response=await fetch(URL+'/functions/v1/team-account-actions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':KEY},body:JSON.stringify({action:'delete',email})});
+   const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'Could not permanently delete this staff member.');
+   await refreshAdminData();
+   alert('Staff member permanently deleted.');
+ }catch(e){alert(e.message||'Could not permanently delete this staff member.')}
+}
 window.archiveTeamMember=email=>setTeamArchive(email,false);
 window.restoreTeamMember=email=>setTeamArchive(email,true);
+window.permanentlyDeleteTeamMember=permanentlyDeleteTeamMember;
 
 function openTeamPasswordReset(profileId){
  const p=staffProfiles.find(x=>x.id===profileId);if(!p)return;
@@ -360,7 +395,7 @@ function renderTeamCard(r,former=false){
  const extras=staffInfoEntries(r),displayName=teamDisplayName(r),email=String(r.email||'').trim(),p=r.profile||staffProfiles.find(x=>String(x.email||'').toLowerCase()===email.toLowerCase()),signedUp=teamAccountEmails.has(email.toLowerCase()),inactive=former||r.is_archived||p?.registration_status==='inactive';
  const accountBadge=inactive?'<span class="badge">Former staff</span>':'<span class="badge '+(signedUp?'booked':'awaiting')+'">'+(signedUp?'KMB.Hub account active':'Not signed up')+'</span>';
  const buttons=inactive
-   ? '<button class="btn green compact" type="button" onclick="restoreTeamMember(\''+esc(email)+'\')">Restore to active team</button>'
+   ? '<button class="btn green compact" type="button" onclick="restoreTeamMember(\''+esc(email)+'\')">Rehire</button><button class="btn red compact" type="button" onclick="permanentlyDeleteTeamMember(\''+esc(email)+'\')">Permanently delete</button>'
    : ((signedUp&&p?.id)?'<button class="btn gold compact" type="button" onclick="openTeamPasswordReset(\''+p.id+'\')">Reset password</button>':'')+
      (!signedUp&&email?'<button class="btn gold compact" type="button" onclick="inviteTeamMember(\''+esc(email)+'\',\''+esc(displayName.replaceAll("'","&#39;"))+'\')">Invite to KMB.Hub</button>':'')+
      '<button class="btn red compact" type="button" onclick="archiveTeamMember(\''+esc(email)+'\')">Move to former staff</button>';
