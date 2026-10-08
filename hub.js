@@ -477,6 +477,28 @@ async function acceptBooking(){
  }finally{$('confirmAcceptBtn').disabled=false}
 }
 $('supportSubmitBtn').onclick=submitSupportTicket;
+if('serviceWorker' in navigator){
+ window.addEventListener('load',()=>navigator.serviceWorker.register('service-worker.js').catch(e=>console.warn('Service worker:',e)));
+}
+window.addEventListener('beforeinstallprompt',e=>{
+ e.preventDefault();
+ deferredInstallPrompt=e;
+ $('installAppBtn')?.classList.remove('hidden');
+});
+window.addEventListener('appinstalled',()=>{
+ deferredInstallPrompt=null;
+ $('installAppBtn')?.classList.add('hidden');
+});
+$('installAppBtn').onclick=async()=>{
+ if(!deferredInstallPrompt){
+   alert('On iPhone/iPad, use Share → Add to Home Screen. On Android/desktop, use your browser’s Install app option.');
+   return;
+ }
+ deferredInstallPrompt.prompt();
+ try{await deferredInstallPrompt.userChoice}catch(_){}
+ deferredInstallPrompt=null;
+ $('installAppBtn').classList.add('hidden');
+};
 $('loginBtn').onclick=login;
 $('loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
 $('logoutBtn').onclick=async()=>{await db.auth.signOut({scope:'local'});showAuth()};
