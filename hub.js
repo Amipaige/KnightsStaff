@@ -32,7 +32,12 @@ async function bootUser(user){
  showApp();
  $('userSummary').innerHTML='<b>'+esc(profile.full_name||user.email)+'</b><br>'+esc(profile.role||'staff');
  document.querySelectorAll('.admin-only').forEach(el=>el.classList.toggle('hidden',profile.role!=='admin'));
- if(profile.role==='admin'){await refreshAdminData();switchView('dashboard')}else{switchView('staffing')}
+ if(profile.role==='admin'){
+   await refreshAdminData();
+   const requestedView=new URLSearchParams(window.location.search).get('view');
+   const allowedViews=new Set(['dashboard','enquiries','bookings','calendar','staffing','support','stock']);
+   switchView(allowedViews.has(requestedView)?requestedView:'dashboard');
+ }else{switchView('staffing')}
 }
 async function refreshStaffingSummary(){
  const today=new Date().toISOString().slice(0,10);
