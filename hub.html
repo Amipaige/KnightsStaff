@@ -7,7 +7,7 @@
   <title>Knights Hub</title>
   <link rel="icon" href="logo-exact.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="logo.png">
-  <link rel="stylesheet" href="hub.css?v=20261008-2">
+  <link rel="stylesheet" href="hub.css?v=20261008-3">
 </head>
 <body>
   <div id="authScreen" class="auth-shell">
@@ -41,7 +41,6 @@
         <button data-view="calendar" class="nav-btn admin-only">Calendar</button>
         <button data-view="staffing" class="nav-btn">Staffing</button>
         <button data-view="support" class="nav-btn">Support</button>
-        <button data-view="backup" class="nav-btn admin-only">Backup</button>
         <button data-view="stock" class="nav-btn admin-only">Stock</button>
       </nav>
       <div class="sidebar-foot">
@@ -55,6 +54,7 @@
         <div>
           <div class="eyebrow" id="viewEyebrow">KNIGHTS MOBILE BARS</div>
           <h1 id="viewTitle">Dashboard</h1>
+          <div id="backupStatusNote" class="small muted admin-only backup-status-note">Last Google backup: checking…</div>
         </div>
         <button id="mobileMenuBtn" class="icon-btn" aria-label="Menu">☰</button>
       </header>
@@ -149,38 +149,6 @@
           <article class="panel">
             <div class="panel-head"><div><h2 id="supportTicketsTitle">My tickets</h2><p class="muted">Recent support requests and their status.</p></div></div>
             <div id="supportTicketsList"><p class="muted">Open Support to load tickets.</p></div>
-          </article>
-        </div>
-      </section>
-
-      <section id="backupView" class="view hidden">
-        <div class="two-col backup-layout">
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>Google Sheets staffing backup</h2>
-                <p class="muted">Keeps an independent copy of your upcoming staffing in Google Drive and refreshes it every hour.</p>
-              </div>
-            </div>
-            <div class="backup-step"><b>1</b><span>Create a blank Google Sheet in the Google Drive account where you want the backup stored.</span></div>
-            <div class="backup-step"><b>2</b><span>In the Sheet, open <strong>Extensions → Apps Script</strong>, delete the starter code and paste the Knights backup script.</span></div>
-            <div class="backup-step"><b>3</b><span>Save it, run <code>setupKnightsBackup</code> once, approve Google’s permissions, then paste the private backup key when prompted.</span></div>
-            <div class="backup-buttons">
-              <a class="btn primary" href="https://sheets.new" target="_blank" rel="noopener">Create Google Sheet</a>
-              <button id="copyBackupScriptBtn" class="btn ghost" type="button">Copy Apps Script</button>
-              <button id="copyBackupKeyBtn" class="btn ghost" type="button">Copy private backup key</button>
-            </div>
-            <p id="backupMsg" class="msg"></p>
-            <p class="small muted">The private key is only shown to an approved Knights administrator. It is not stored in the public website code.</p>
-          </article>
-          <article class="panel">
-            <div class="panel-head"><div><h2>What the backup keeps</h2><p class="muted">Designed as a fallback if the app interface ever has a problem.</p></div></div>
-            <div class="backup-feature"><b>Upcoming Events</b><span>Dates, venues, timings, package, manager and staffing totals.</span></div>
-            <div class="backup-feature"><b>Confirmed Staffing</b><span>Every confirmed staff member plus Bar Managers, with email and shift times.</span></div>
-            <div class="backup-feature"><b>Pending Requests</b><span>Who has offered to work but has not yet been accepted or marked not required.</span></div>
-            <div class="backup-feature"><b>Staff Directory</b><span>Current staff names, emails and registration status.</span></div>
-            <div class="backup-feature"><b>Daily History</b><span>One permanent staffing snapshot per day, so accidental changes do not overwrite all recovery history.</span></div>
-            <div class="backup-feature"><b>Backup Log</b><span>Every successful or failed sync with a timestamp. Failed fetches keep the previous good data.</span></div>
           </article>
         </div>
       </section>
@@ -342,6 +310,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
-  <script src="hub.js?v=20261008-2"></script>
+  <script src="hub.js?v=20261008-3"></script>
 </body>
 </html>
