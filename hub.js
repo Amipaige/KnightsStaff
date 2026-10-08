@@ -73,6 +73,10 @@ function switchView(name){
  $('viewTitle').textContent=({dashboard:'Dashboard',enquiries:'Enquiries',bookings:'Bookings',calendar:'Calendar',staffing:'Staffing',support:'Support',stock:'Stock'}[name]||'Knights Hub');
  if(name==='calendar')renderCalendar();
  if(name==='support')loadSupportTickets().catch(e=>{$('supportMsg').textContent=e.message||'Could not load support tickets.'});
+ if(name==='staffing'){
+   const frame=$('staffingFrame');
+   try{frame?.contentWindow?.postMessage({type:'knights-show-shifts'},window.location.origin)}catch(_){}
+ }
  if(name==='dashboard'&&profile?.role==='admin')Promise.all([refreshStaffingSummary(),refreshBackupStatus()]).then(renderDashboard).catch(e=>console.warn('Dashboard refresh:',e));
  if(window.innerWidth<901)document.querySelector('.sidebar')?.classList.remove('open');
 }
@@ -357,10 +361,12 @@ async function loadSupportTickets(){
 function renderSupportTickets(){
  $('supportTicketsList').innerHTML=supportTickets.length?supportTickets.map(t=>{
    const when=new Date(t.created_at).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
-   const adminActions=profile?.role==='admin'?'<div class="actions">'+(t.status!=='in_progress'?'<button class="btn ghost compact" data-ticket-status="'+t.id+'" data-status="in_progress">In progress</button>':'')+(t.status!=='resolved'?'<button class="btn green compact" data-ticket-status="'+t.id+'" data-status="resolved">Resolve</button>':'<button class="btn ghost compact" data-ticket-status="'+t.id+'" data-status="open">Reopen</button>')+'</div>':'';
+   const retryEmail=t.email_error&&!t.email_sent_at?'<button class="btn ghost compact" data-ticket-retry="'+t.id+'">Retry email</button>':'';
+   const adminActions=profile?.role==='admin'?'<div class="actions">'+retryEmail+(t.status!=='in_progress'?'<button class="btn ghost compact" data-ticket-status="'+t.id+'" data-status="in_progress">In progress</button>':'')+(t.status!=='resolved'?'<button class="btn green compact" data-ticket-status="'+t.id+'" data-status="resolved">Resolve</button>':'<button class="btn ghost compact" data-ticket-status="'+t.id+'" data-status="open">Reopen</button>')+'</div>':'';
    return '<div class="support-ticket"><div class="row"><div><b>'+esc(t.subject)+'</b><div class="meta">#'+esc(String(t.id).slice(0,8).toUpperCase())+' · '+esc(supportCategoryLabel(t.category))+' · '+esc(when)+(profile?.role==='admin'?' · '+esc(t.reporter_name||'Unknown user'):'')+'</div></div><span class="badge '+(t.status==='resolved'?'booked':t.status==='in_progress'?'awaiting':'overdue')+'">'+esc(supportStatusLabel(t.status).toUpperCase())+'</span></div><p class="support-description">'+esc(t.description)+'</p>'+adminActions+'</div>';
  }).join(''):'<p class="muted">No support tickets yet.</p>';
  document.querySelectorAll('[data-ticket-status]').forEach(b=>b.onclick=()=>setSupportStatus(b.dataset.ticketStatus,b.dataset.status));
+ document.querySelectorAll('[data-ticket-retry]').forEach(b=>b.onclick=()=>retrySupportEmail(b.dataset.ticketRetry,b));
 }
 async function submitSupportTicket(){
  const category=$('supportCategory').value,subject=$('supportSubject').value.trim(),description=$('supportDescription').value.trim();
@@ -373,10 +379,23 @@ async function submitSupportTicket(){
    const response=await fetch(URL+'/functions/v1/submit-support-ticket',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':KEY},body:JSON.stringify({category,subject,description,page:$('viewTitle').textContent})});
    const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'Could not submit support ticket.');
    $('supportSubject').value='';$('supportDescription').value='';
-   $('supportMsg').textContent='Ticket #'+String(body.ticket_ref||'').toUpperCase()+' submitted. Knights has received it.';
+   $('supportMsg').textContent=body.email_sent?'Ticket #'+String(body.ticket_ref||'').toUpperCase()+' submitted and email alert sent.':'Ticket #'+String(body.ticket_ref||'').toUpperCase()+' submitted. The ticket is saved, but the email alert could not be sent.';
    await loadSupportTickets();
  }catch(e){$('supportMsg').textContent=e.message||'Could not submit support ticket.'}
  finally{$('supportSubmitBtn').disabled=false}
+}
+async function retrySupportEmail(id,button){
+ if(button)button.disabled=true;
+ try{
+   const {data:{session},error:sessionError}=await db.auth.getSession();if(sessionError)throw sessionError;
+   if(!session?.access_token)throw new Error('Your session has expired. Please sign in again.');
+   const response=await fetch(URL+'/functions/v1/submit-support-ticket',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':KEY},body:JSON.stringify({action:'retry_email',ticket_id:id})});
+   const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'Could not retry support email.');
+   if(!body.email_sent)throw new Error(body.email_error||'Email still could not be sent.');
+   await loadSupportTickets();
+   alert('Support email sent successfully.');
+ }catch(e){alert(e.message||'Could not retry support email.')}
+ finally{if(button)button.disabled=false}
 }
 async function setSupportStatus(id,status){
  const r=await db.from('support_tickets').update({status,updated_at:new Date().toISOString()}).eq('id',id);
@@ -469,6 +488,7 @@ document.querySelectorAll('[data-close-modal]').forEach(b=>b.onclick=closeModals
 document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModals()}));
 $('prevMonth').onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()-1,1);renderCalendar()};
 $('nextMonth').onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()+1,1);renderCalendar()};
+$('staffingFrame')?.addEventListener('load',()=>{if(!$('staffingView')?.classList.contains('hidden')){try{$('staffingFrame').contentWindow?.postMessage({type:'knights-show-shifts'},window.location.origin)}catch(_){}}});
 window.addEventListener('message',e=>{
  if(e.origin!==window.location.origin||!e.data)return;
  if(e.data.type==='knights-open-booking'&&e.data.staffingEventId){
