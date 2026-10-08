@@ -475,7 +475,7 @@ function openBooking(id,showRequirements=false,focusTaskId=null){
  $('editBookingId').value=id;$('bookingModalTitle').textContent=b.customer_name||b.event_name;
  $('editCustomer').value=b.customer_name||'';$('editEmail').value=b.customer_email||'';$('editPhone').value=b.customer_phone||'';
  $('editEvent').value=b.event_name||'';$('editDate').value=b.event_date||'';$('editVenue').value=b.venue||'';$('editGuests').value=b.guest_count||'';
- $('editBar').value=b.bar_type;$('editTotal').value=Number(b.total_amount||0);$('editStaff').value=b.staff_required||1;
+ $('editBar').value=b.bar_type;$('editTotal').value=Number(b.total_amount||0);$('editMinimumSpend').value=Number(b.minimum_spend||0);$('editStaff').value=b.staff_required||1;
  $('editArrival').value=String(b.arrival_time||'').slice(0,5);$('editStart').value=String(b.start_time||'').slice(0,5);$('editFinish').value=String(b.finish_time||'').slice(0,5);
  $('editTens').checked=!!b.tens_required;$('editNotes').value=b.notes||'';
  $('paymentAmount').value='';$('paymentType').value='balance';$('paymentMethod').value='Bank transfer';$('paymentReference').value='';
@@ -532,7 +532,7 @@ async function saveBooking(){
  const payload={
    customer_name:$('editCustomer').value.trim(),customer_email:$('editEmail').value.trim()||null,customer_phone:$('editPhone').value.trim()||null,
    event_name:$('editEvent').value.trim(),event_date:$('editDate').value,venue:$('editVenue').value.trim(),
-   guest_count:$('editGuests').value?Number($('editGuests').value):null,bar_type:$('editBar').value,total_amount:Number($('editTotal').value||0),
+   guest_count:$('editGuests').value?Number($('editGuests').value):null,bar_type:$('editBar').value,total_amount:Number($('editTotal').value||0),minimum_spend:Number($('editMinimumSpend').value||0),
    staff_required:Number($('editStaff').value||1),arrival_time:$('editArrival').value||null,start_time:$('editStart').value||null,finish_time:$('editFinish').value||null,
    tens_required:$('editTens').checked,notes:$('editNotes').value.trim()||null,updated_at:new Date().toISOString()
  };
@@ -667,7 +667,7 @@ async function acceptBooking(){
    const staffRequired=Number($('acceptStaff').value||1),arrival=$('acceptArrival').value||null,start=$('acceptStart').value||null,finish=$('acceptFinish').value||null;
    const ev=await db.from('bar_events').insert({event_name:eventName,event_date:eventDate,venue,arrival_time:arrival,start_time:start,finish_time:finish,staff_required:staffRequired,bar_package:barLabel(bar),guest_count:guests,notes:e.notes}).select('id').single();
    if(ev.error)throw ev.error;eventId=ev.data.id;
-   const br=await db.from('bookings').insert({enquiry_id:e.id,customer_name:e.customer_name,customer_email:e.customer_email,customer_phone:e.customer_phone,event_name:eventName,event_date:eventDate,venue,guest_count:guests,bar_type:bar,staff_required:staffRequired,arrival_time:arrival,start_time:start,finish_time:finish,total_amount:Number($('acceptTotal').value||0),booking_fee_due:fee,booking_status:'booked',tens_required:$('acceptTens').checked,staffing_event_id:eventId,notes:e.notes,requirements:rawResponses(e)}).select('id').single();
+   const br=await db.from('bookings').insert({enquiry_id:e.id,customer_name:e.customer_name,customer_email:e.customer_email,customer_phone:e.customer_phone,event_name:eventName,event_date:eventDate,venue,guest_count:guests,bar_type:bar,staff_required:staffRequired,arrival_time:arrival,start_time:start,finish_time:finish,total_amount:Number($('acceptTotal').value||0),minimum_spend:Number($('acceptMinimumSpend').value||0),booking_fee_due:fee,booking_status:'booked',tens_required:$('acceptTens').checked,staffing_event_id:eventId,notes:e.notes,requirements:rawResponses(e)}).select('id').single();
    if(br.error)throw br.error;bookingId=br.data.id;
    const pay=await db.from('booking_payments').insert({booking_id:bookingId,amount:fee,payment_type:'booking_fee',method:$('acceptMethod').value||null,reference:$('acceptReference').value.trim()||null});
    if(pay.error)throw pay.error;
