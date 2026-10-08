@@ -179,17 +179,13 @@ function bookingYearSection(year,list,labelClass=''){
 function renderBookings(){
  const now=new Date(),currentYear=now.getFullYear();
  const active=bookings.filter(b=>b.booking_status!=='cancelled');
- const cancelled=bookings.filter(b=>b.booking_status==='cancelled').sort((a,b)=>b.event_date.localeCompare(a.event_date));
  const current=active.filter(b=>Number(String(b.event_date||'').slice(0,4))===currentYear).sort((a,b)=>a.event_date.localeCompare(b.event_date));
  const futureYears=[...new Set(active.map(b=>Number(String(b.event_date||'').slice(0,4))).filter(y=>y>currentYear))].sort((a,b)=>a-b);
  const pastYears=[...new Set(active.map(b=>Number(String(b.event_date||'').slice(0,4))).filter(y=>y<currentYear))].sort((a,b)=>b-a);
  let html='<section class="booking-current-year"><div class="booking-section-head"><h3>'+currentYear+' bookings</h3><span>'+current.length+'</span></div>'+(current.length?current.map(bookingListCard).join(''):'<p class="muted">No '+currentYear+' bookings yet.</p>')+'</section>';
  html+=futureYears.map(year=>bookingYearSection(year,active.filter(b=>Number(String(b.event_date||'').slice(0,4))===year),'future-year')).join('');
  html+=pastYears.map(year=>bookingYearSection(year,active.filter(b=>Number(String(b.event_date||'').slice(0,4))===year),'past-year')).join('');
- if(cancelled.length){
-   html+='<details class="booking-year-section cancelled-section"><summary><span>Cancelled bookings</span><b>'+cancelled.length+'</b></summary><div class="booking-year-body">'+cancelled.map(bookingListCard).join('')+'</div></details>';
- }
- $('bookingList').innerHTML=bookings.length?html:'<p class="muted">No accepted bookings yet.</p>';
+ $('bookingList').innerHTML=active.length?html:'<p class="muted">No accepted bookings yet.</p>';
  document.querySelectorAll('[data-edit-booking]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();openBooking(x.dataset.editBooking)});
  document.querySelectorAll('[data-cancel-booking]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();openCancelBooking(x.dataset.cancelBooking)});
  document.querySelectorAll('[data-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.booking));
