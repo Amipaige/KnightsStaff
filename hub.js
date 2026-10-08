@@ -264,7 +264,8 @@ async function inviteTeamMember(email,name){
    });
    const body=await response.json().catch(()=>({}));
    if(!response.ok)throw new Error(body.error||'Could not send invitation.');
-   alert('KMB.Hub invitation sent to '+email+'.');
+   alert('KMB.Hub invitation accepted for sending to '+email+'. If it does not arrive within a few minutes, check Junk/Spam and use Resend invite from Team.');
+   await refreshAdminData();
  }catch(e){
    alert(e.message||'Could not send invitation.');
  }
@@ -401,12 +402,12 @@ function renderTeamCard(r,former=false){
  const buttons=inactive
    ? '<button class="btn green compact" type="button" onclick="restoreTeamMember(\''+esc(email)+'\')">Rehire</button><button class="btn red compact" type="button" onclick="permanentlyDeleteTeamMember(\''+esc(email)+'\')">Permanently delete</button>'
    : ((signedUp&&p?.id)?'<button class="btn gold compact" type="button" onclick="openTeamPasswordReset(\''+p.id+'\')">Reset password</button>':'')+
-     (!signedUp&&email?'<button class="btn gold compact" type="button" onclick="inviteTeamMember(\''+esc(email)+'\',\''+esc(displayName.replaceAll("'","&#39;"))+'\')">Invite to KMB.Hub</button>':'')+
+     (!signedUp&&email?'<button class="btn gold compact" type="button" onclick="inviteTeamMember(\''+esc(email)+'\',\''+esc(displayName.replaceAll("'","&#39;"))+'\')">'+(r.invite_sent_at?'Resend invite':'Invite to KMB.Hub')+'</button>':'')+
      '<button class="btn red compact" type="button" onclick="archiveTeamMember(\''+esc(email)+'\')">Move to former staff</button>';
  return '<article class="team-card"><div class="team-card-head"><div><h3>'+esc(displayName)+'</h3><div class="small muted">'+(r.synced_at?'Synced '+new Date(r.synced_at).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'KMB.Hub staff record')+'</div></div>'+accountBadge+'</div><div class="team-primary">'+
    (email?'<div><span>Email</span><a href="mailto:'+encodeURIComponent(email)+'">'+esc(email)+'</a></div>':'')+
    (r.phone?'<div><span>Phone</span><a href="tel:'+esc(String(r.phone).replace(/[^+\d]/g,''))+'">'+esc(r.phone)+'</a></div>':'')+
-   '</div><div class="actions team-actions">'+buttons+'</div>'+
+   '</div>'+(r.invite_sent_at&&!signedUp?'<div class="small muted">Invite last sent '+new Date(r.invite_sent_at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+(r.invite_error?' · email error':'')+'</div>':'')+(r.invite_error&&!signedUp?'<div class="small" style="color:var(--red)">Invite email failed: '+esc(r.invite_error)+'</div>':'')+'<div class="actions team-actions">'+buttons+'</div>'+
    (extras.length?'<details class="team-details"><summary>View all staff information</summary><div class="team-info-grid">'+extras.map(([k,v])=>'<div class="team-info-row"><span>'+esc(k)+'</span><b>'+teamContactValue(v)+'</b></div>').join('')+'</div></details>':'<p class="small muted">No additional form details synced yet.</p>')+'</article>';
 }
 function renderTeam(){
