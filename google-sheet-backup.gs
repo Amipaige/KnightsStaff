@@ -135,6 +135,7 @@ function syncStaffingBackup() {
     updateStatusSheet_(ss, data);
     appendDailyHistory_(ss, data);
     logBackup_(ss, 'SUCCESS', data.counts, '');
+    acknowledgeBackupSuccess_(key, data);
     setStatusValue_(ss, 'Last sync status', 'SUCCESS');
     setStatusValue_(ss, 'Last error', '');
     SpreadsheetApp.flush();
@@ -149,6 +150,28 @@ function syncStaffingBackup() {
     setStatusValue_(ss, 'Last sync status', 'FAILED — check History');
     setStatusValue_(ss, 'Last error', error.message || String(error));
     throw error;
+  }
+}
+
+function acknowledgeBackupSuccess_(key, data) {
+  try {
+    UrlFetchApp.fetch(KNIGHTS_BACKUP.endpoint, {
+      method: 'post',
+      contentType: 'application/json',
+      headers: {
+        Authorization: 'Bearer ' + KNIGHTS_BACKUP.anonKey,
+        apikey: KNIGHTS_BACKUP.anonKey,
+        'x-backup-key': key
+      },
+      payload: JSON.stringify({
+        action: 'ack_success',
+        source_generated_at: data.generated_at,
+        counts: data.counts || {}
+      }),
+      muteHttpExceptions: true
+    });
+  } catch (_) {
+    // The Sheet backup has already succeeded; acknowledgement failure must not undo it.
   }
 }
 
