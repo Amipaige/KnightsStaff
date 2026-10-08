@@ -3,7 +3,7 @@ const URL='https://jpjrsndbjklecvwiuvbf.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwanJzbmRiamtsZWN2d2l1dmJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY1MzQ1MTQsImV4cCI6MjEwMjExMDUxNH0.KrNOCgc71pyc7vNgWdy9juQCz5PiEl0oIQ52QFv-9FE';
 const db=window.supabase.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const $=id=>document.getElementById(id);
-let me=null,profile=null,bookings=[],enquiries=[],payments=[],tasks=[],checklistItems=[],staffingEvents=[],staffingSignups=[],calendarCursor=new Date();
+let me=null,profile=null,bookings=[],enquiries=[],payments=[],tasks=[],checklistItems=[],staffingEvents=[],staffingSignups=[],supportTickets=[],calendarCursor=new Date();
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>'£'+Number(n||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
 const dmy=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
@@ -61,8 +61,9 @@ function switchView(name){
  document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
  const el=$(name+'View');if(el)el.classList.remove('hidden');
  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===name));
- $('viewTitle').textContent=({dashboard:'Dashboard',enquiries:'Enquiries',bookings:'Bookings',calendar:'Calendar',staffing:'Staffing',stock:'Stock'}[name]||'Knights Hub');
+ $('viewTitle').textContent=({dashboard:'Dashboard',enquiries:'Enquiries',bookings:'Bookings',calendar:'Calendar',staffing:'Staffing',support:'Support',stock:'Stock'}[name]||'Knights Hub');
  if(name==='calendar')renderCalendar();
+ if(name==='support')loadSupportTickets().catch(e=>{$('supportMsg').textContent=e.message||'Could not load support tickets.'});
  if(name==='dashboard'&&profile?.role==='admin')refreshStaffingSummary().then(renderDashboard).catch(e=>console.warn('Staffing summary refresh:',e));
  if(window.innerWidth<901)document.querySelector('.sidebar')?.classList.remove('open');
 }
@@ -335,6 +336,45 @@ async function saveBooking(){
  }catch(e){$('bookingEditMsg').textContent=e.message||'Could not save booking.'}
  finally{$('saveBookingBtn').disabled=false}
 }
+function supportCategoryLabel(x){return ({app_issue:'App issue',login:'Login',staffing:'Staffing',bookings:'Bookings',stock:'Stock',other:'Other'}[x]||x||'Other')}
+function supportStatusLabel(x){return String(x||'open').replaceAll('_',' ')}
+async function loadSupportTickets(){
+ const r=await db.from('support_tickets').select('*').order('created_at',{ascending:false}).limit(100);
+ if(r.error)throw r.error;
+ supportTickets=r.data||[];
+ $('supportTicketsTitle').textContent=profile?.role==='admin'?'Support tickets':'My tickets';
+ renderSupportTickets();
+}
+function renderSupportTickets(){
+ $('supportTicketsList').innerHTML=supportTickets.length?supportTickets.map(t=>{
+   const when=new Date(t.created_at).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+   const adminActions=profile?.role==='admin'?'<div class="actions">'+(t.status!=='in_progress'?'<button class="btn ghost compact" data-ticket-status="'+t.id+'" data-status="in_progress">In progress</button>':'')+(t.status!=='resolved'?'<button class="btn green compact" data-ticket-status="'+t.id+'" data-status="resolved">Resolve</button>':'<button class="btn ghost compact" data-ticket-status="'+t.id+'" data-status="open">Reopen</button>')+'</div>':'';
+   return '<div class="support-ticket"><div class="row"><div><b>'+esc(t.subject)+'</b><div class="meta">#'+esc(String(t.id).slice(0,8).toUpperCase())+' · '+esc(supportCategoryLabel(t.category))+' · '+esc(when)+(profile?.role==='admin'?' · '+esc(t.reporter_name||'Unknown user'):'')+'</div></div><span class="badge '+(t.status==='resolved'?'booked':t.status==='in_progress'?'awaiting':'overdue')+'">'+esc(supportStatusLabel(t.status).toUpperCase())+'</span></div><p class="support-description">'+esc(t.description)+'</p>'+adminActions+'</div>';
+ }).join(''):'<p class="muted">No support tickets yet.</p>';
+ document.querySelectorAll('[data-ticket-status]').forEach(b=>b.onclick=()=>setSupportStatus(b.dataset.ticketStatus,b.dataset.status));
+}
+async function submitSupportTicket(){
+ const category=$('supportCategory').value,subject=$('supportSubject').value.trim(),description=$('supportDescription').value.trim();
+ if(subject.length<3)return $('supportMsg').textContent='Add a short subject.';
+ if(description.length<5)return $('supportMsg').textContent='Tell us a little more about what happened.';
+ $('supportSubmitBtn').disabled=true;$('supportMsg').textContent='Submitting…';
+ try{
+   const {data:{session},error:sessionError}=await db.auth.getSession();if(sessionError)throw sessionError;
+   if(!session?.access_token)throw new Error('Your session has expired. Please sign in again.');
+   const response=await fetch(URL+'/functions/v1/submit-support-ticket',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':KEY},body:JSON.stringify({category,subject,description,page:$('viewTitle').textContent})});
+   const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'Could not submit support ticket.');
+   $('supportSubject').value='';$('supportDescription').value='';
+   $('supportMsg').textContent='Ticket #'+String(body.ticket_ref||'').toUpperCase()+' submitted. Knights has received it.';
+   await loadSupportTickets();
+ }catch(e){$('supportMsg').textContent=e.message||'Could not submit support ticket.'}
+ finally{$('supportSubmitBtn').disabled=false}
+}
+async function setSupportStatus(id,status){
+ const r=await db.from('support_tickets').update({status,updated_at:new Date().toISOString()}).eq('id',id);
+ if(r.error)return alert(r.error.message);
+ await loadSupportTickets();
+}
+
 async function addPayment(){
  const id=$('editBookingId').value,b=bookings.find(x=>x.id===id);if(!b)return;
  const amount=Number($('paymentAmount').value||0);if(amount<=0)return $('paymentMsg').textContent='Enter the payment amount received.';
@@ -407,6 +447,7 @@ async function acceptBooking(){
    if(eventId)await db.from('bar_events').delete().eq('id',eventId);
  }finally{$('confirmAcceptBtn').disabled=false}
 }
+$('supportSubmitBtn').onclick=submitSupportTicket;
 $('loginBtn').onclick=login;
 $('loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
 $('logoutBtn').onclick=async()=>{await db.auth.signOut({scope:'local'});showAuth()};
