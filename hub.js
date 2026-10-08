@@ -3,7 +3,7 @@ const URL='https://jpjrsndbjklecvwiuvbf.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwanJzbmRiamtsZWN2d2l1dmJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY1MzQ1MTQsImV4cCI6MjEwMjExMDUxNH0.KrNOCgc71pyc7vNgWdy9juQCz5PiEl0oIQ52QFv-9FE';
 const db=window.supabase.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const $=id=>document.getElementById(id);
-let me=null,profile=null,bookings=[],enquiries=[],payments=[],tasks=[],checklistItems=[],staffingEvents=[],staffingSignups=[],supportTickets=[],calendarCursor=new Date();
+let me=null,profile=null,bookings=[],enquiries=[],payments=[],tasks=[],checklistItems=[],staffingEvents=[],staffingSignups=[],supportTickets=[],staffInformation=[],calendarCursor=new Date();
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>'£'+Number(n||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
 const dmy=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
@@ -35,7 +35,7 @@ async function bootUser(user){
  if(profile.role==='admin'){
    await refreshAdminData();
    const requestedView=new URLSearchParams(window.location.search).get('view');
-   const allowedViews=new Set(['dashboard','enquiries','bookings','calendar','staffing','support','stock']);
+   const allowedViews=new Set(['dashboard','enquiries','bookings','calendar','staffing','team','support','stock']);
    switchView(allowedViews.has(requestedView)?requestedView:'dashboard');
  }else{switchView('staffing')}
 }
@@ -58,25 +58,27 @@ async function refreshBackupStatus(){
  el.textContent='Last Google backup: '+when;
 }
 async function refreshAdminData(){
- const [b,e,p,t,c]=await Promise.all([
+ const [b,e,p,t,c,si]=await Promise.all([
    db.from('bookings').select('*').order('event_date',{ascending:true}),
    db.from('booking_enquiries').select('*').order('created_at',{ascending:false}),
    db.from('booking_payments').select('*').order('paid_at',{ascending:false}),
    db.from('booking_tasks').select('*').order('due_date',{ascending:true}),
-   db.from('booking_checklist_items').select('*').order('sort_order',{ascending:true})
+   db.from('booking_checklist_items').select('*').order('sort_order',{ascending:true}),
+   db.from('staff_information').select('*').order('full_name',{ascending:true})
  ]);
- for(const x of [b,e,p,t,c])if(x.error)throw x.error;
- bookings=b.data||[];enquiries=e.data||[];payments=p.data||[];tasks=t.data||[];checklistItems=c.data||[];
+ for(const x of [b,e,p,t,c,si])if(x.error)throw x.error;
+ bookings=b.data||[];enquiries=e.data||[];payments=p.data||[];tasks=t.data||[];checklistItems=c.data||[];staffInformation=si.data||[];
  await Promise.all([refreshStaffingSummary(),refreshBackupStatus()]);
- renderDashboard();renderEnquiries();renderBookings();renderCalendar();
+ renderDashboard();renderEnquiries();renderBookings();renderCalendar();renderTeam();
 }
 function totalPaid(bookingId){return payments.filter(p=>p.booking_id===bookingId).reduce((s,p)=>s+Number(p.amount||0),0)}
 function switchView(name){
  document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
  const el=$(name+'View');if(el)el.classList.remove('hidden');
  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===name));
- $('viewTitle').textContent=({dashboard:'Dashboard',enquiries:'Enquiries',bookings:'Bookings',calendar:'Calendar',staffing:'Staffing',support:'Support',stock:'Stock'}[name]||'Knights Hub');
+ $('viewTitle').textContent=({dashboard:'Dashboard',enquiries:'Enquiries',bookings:'Bookings',calendar:'Calendar',staffing:'Staffing',team:'Team',support:'Support',stock:'Stock'}[name]||'Knights Hub');
  if(name==='calendar')renderCalendar();
+ if(name==='team')renderTeam();
  if(name==='support')loadSupportTickets().catch(e=>{$('supportMsg').textContent=e.message||'Could not load support tickets.'});
  if(name==='staffing'){
    const frame=$('staffingFrame');
@@ -214,12 +216,42 @@ function renderCalendar(){
    const dayBookings=bookings.filter(b=>b.event_date===iso&&b.booking_status!=='cancelled');
    const dayTasks=tasks.filter(t=>t.due_date===iso&&t.status==='open').filter(t=>bookings.some(b=>b.id===t.booking_id&&b.booking_status!=='cancelled'));
    const taskIcons=dayTasks.map(t=>{const b=bookings.find(x=>x.id===t.booking_id);return '<button class="calendar-task-icon" data-task-booking="'+t.booking_id+'" data-task-id="'+t.id+'" title="'+esc((b?.customer_name||'Booking')+' — '+t.title)+'" aria-label="Task due">☑</button>'}).join('');
-   const availabilityDot=dayBookings.length?'<span class="availability-dot '+(dayBookings.length>=3?'full':dayBookings.length===2?'limited':'available')+'" title="'+dayBookings.length+' of 3 bookings used" aria-label="'+dayBookings.length+' of 3 bookings used"></span>':'';
-   html+='<div class="calendar-day '+(d.getMonth()!==m?'outside':'')+'"><div class="calendar-day-head"><div class="day-num">'+d.getDate()+availabilityDot+'</div><div class="calendar-task-icons">'+taskIcons+'</div></div>'+dayBookings.map(b=>'<button class="cal-event '+barClass(b.bar_type)+'" data-calendar-booking="'+b.id+'" title="'+esc(b.customer_name)+' — '+esc(b.event_name)+'">'+esc(b.customer_name)+'</button>').join('')+'</div>';
+   const availabilityClass=dayBookings.length?(dayBookings.length>=3?'full':dayBookings.length===2?'limited':'available'):'';
+   const availabilityLabel=dayBookings.length?dayBookings.length+' of 3 bookings used':'';
+   html+='<div class="calendar-day '+(d.getMonth()!==m?'outside':'')+'"><div class="calendar-day-head"><div class="day-num '+availabilityClass+'" '+(availabilityLabel?'title="'+availabilityLabel+'" aria-label="'+availabilityLabel+'"':'')+'>'+d.getDate()+'</div><div class="calendar-task-icons">'+taskIcons+'</div></div>'+dayBookings.map(b=>'<button class="cal-event '+barClass(b.bar_type)+'" data-calendar-booking="'+b.id+'" title="'+esc(b.customer_name)+' — '+esc(b.event_name)+'">'+esc(b.customer_name)+'</button>').join('')+'</div>';
  }
  $('calendarGrid').innerHTML=html;
  document.querySelectorAll('[data-calendar-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.calendarBooking,true));
  document.querySelectorAll('[data-task-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.taskBooking,false,x.dataset.taskId));
+}
+function staffInfoEntries(row){
+ const raw=row?.raw_data&&typeof row.raw_data==='object'?row.raw_data:{};
+ const common=/^(email|e-?mail|email address|full ?name|name|phone|mobile|telephone|contact number|timestamp|source_updated_at)$/i;
+ return Object.entries(raw).filter(([k,v])=>!common.test(String(k).trim())&&String(v??'').trim());
+}
+function isEmailValue(v){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v||'').trim())}
+function isPhoneValue(v){const x=String(v||'').trim();return /\d/.test(x)&&/^\+?[\d\s().-]{7,}$/.test(x)}
+function teamContactValue(v){
+ const value=String(v??'').trim();
+ if(isEmailValue(value))return '<a class="team-contact-link" href="mailto:'+encodeURIComponent(value)+'">'+esc(value)+'</a>';
+ if(isPhoneValue(value))return '<a class="team-contact-link" href="tel:'+esc(value.replace(/[^+\d]/g,''))+'">'+esc(value)+'</a>';
+ return esc(value);
+}
+function renderTeam(){
+ const host=$('teamList');if(!host)return;
+ const query=String($('teamSearch')?.value||'').trim().toLowerCase();
+ const rows=staffInformation.filter(r=>!query||[r.full_name,r.email,r.phone,JSON.stringify(r.raw_data||{})].some(v=>String(v||'').toLowerCase().includes(query)));
+ const latest=staffInformation.map(r=>r.synced_at).filter(Boolean).sort().at(-1);
+ const status=$('teamSyncStatus');
+ if(status)status.textContent=staffInformation.length?(staffInformation.length+' staff record'+(staffInformation.length===1?'':'s')+(latest?' · Last synced '+new Date(latest).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'')):'Waiting for staff information sync';
+ if(!rows.length){host.innerHTML='<p class="muted">'+(staffInformation.length?'No matching staff.':'No staff information has synced from Google Sheets yet.')+'</p>';return}
+ host.innerHTML='<div class="team-grid">'+rows.map(r=>{
+   const extras=staffInfoEntries(r);
+   return '<article class="team-card"><div class="team-card-head"><div><h3>'+esc(r.full_name||'Unnamed staff member')+'</h3><div class="small muted">Synced '+(r.synced_at?new Date(r.synced_at).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—')+'</div></div></div><div class="team-primary">'+
+     (r.email?'<div><span>Email</span><a href="mailto:'+encodeURIComponent(r.email)+'">'+esc(r.email)+'</a></div>':'')+
+     (r.phone?'<div><span>Phone</span><a href="tel:'+esc(String(r.phone).replace(/[^+\d]/g,''))+'">'+esc(r.phone)+'</a></div>':'')+
+     '</div>'+(extras.length?'<details class="team-details"><summary>View all staff information</summary><div class="team-info-grid">'+extras.map(([k,v])=>'<div class="team-info-row"><span>'+esc(k)+'</span><b>'+teamContactValue(v)+'</b></div>').join('')+'</div></details>':'<p class="small muted">No additional form details synced yet.</p>')+'</article>';
+ }).join('')+'</div>';
 }
 function requirementRows(obj){
  const entries=Object.entries(obj||{}).filter(([q,a])=>String(q).trim()&&String(a??'').trim());
@@ -509,6 +541,7 @@ $('newEnquiryBtn').onclick=()=>{['eqCustomer','eqEmail','eqPhone','eqEvent','eqD
 $('saveEnquiryBtn').onclick=saveEnquiry;$('confirmAcceptBtn').onclick=acceptBooking;$('saveBookingBtn').onclick=saveBooking;$('addPaymentBtn').onclick=addPayment;$('cancelBookingBtn').onclick=()=>openCancelBooking($('editBookingId').value);$('confirmCancelBookingBtn').onclick=confirmCancelBooking;$('keepBookingBtn').onclick=()=>$('cancelBookingModal').classList.add('hidden');
 document.querySelectorAll('[data-close-modal]').forEach(b=>b.onclick=closeModals);
 document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModals()}));
+$('teamSearch')?.addEventListener('input',renderTeam);
 $('prevMonth').onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()-1,1);renderCalendar()};
 $('nextMonth').onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()+1,1);renderCalendar()};
 $('staffingFrame')?.addEventListener('load',()=>{if(!$('staffingView')?.classList.contains('hidden')){try{$('staffingFrame').contentWindow?.postMessage({type:'knights-show-shifts'},window.location.origin)}catch(_){}}});
