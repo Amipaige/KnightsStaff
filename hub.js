@@ -7,6 +7,9 @@ let me=null,profile=null,bookings=[],enquiries=[],payments=[],tasks=[],checklist
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>'£'+Number(n||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
 const dmy=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
+const dateMinusDaysIso=(date,days)=>{if(!date)return null;const d=new Date(date+'T12:00:00');d.setDate(d.getDate()-days);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
+const paymentDueDate=b=>dateMinusDaysIso(b?.event_date,42);
+const paymentOutstanding=b=>Math.max(0,Number(b?.total_amount||0)-totalPaid(b?.id));
 const barLabel=x=>({luxury:'Luxury',pop_up:'Pop-up',stock_and_staff:'Stock & staff'}[x]||x||'—');
 const barClass=x=>x==='pop_up'?'pop-up':x==='stock_and_staff'?'stock-staff':'luxury';
 const stale=e=>/refresh token|session.*not found|invalid.*token/i.test(String(e?.message||e||''));
@@ -104,22 +107,29 @@ function renderDashboard(){
    const due=new Date(t.due_date+'T12:00:00'),showFrom=new Date(due);showFrom.setDate(showFrom.getDate()-14);
    return todayDate>=showFrom;
  });
+ const paymentActions=bookings.filter(b=>b.booking_status!=='cancelled'&&paymentOutstanding(b)>0&&paymentDueDate(b)&&paymentDueDate(b)<=today);
  const outstandingEnquiries=enquiries.filter(e=>e.status!=='accepted'&&e.status!=='declined');
  const activeStaffingIds=new Set(staffingEvents.map(e=>e.id));
  const staffingRequests=staffingSignups.filter(s=>s.status==='pending'&&activeStaffingIds.has(s.event_id)).length;
  const eventsNeedStaff=staffingEvents.filter(e=>staffingFilledCount(e)<Number(e.staff_required||0)).length;
  $('statUpcoming').textContent=allUpcoming.length;
  $('statOutstanding').textContent=money(outstanding);
- $('statTasks').textContent=allOpenTasks.length;
+ $('statTasks').textContent=allOpenTasks.length+paymentActions.length;
  $('statPending').textContent=outstandingEnquiries.length;
  $('statStaffRequests').textContent=staffingRequests;
  $('statNeedStaff').textContent=eventsNeedStaff;
  $('dashboardEvents').innerHTML=currentMonthUpcoming.map(bookingCardMini).join('')||'<p class="muted">No more bookings this month.</p>';
- $('dashboardTasks').innerHTML=openTasks.slice(0,8).map(t=>{
+ const paymentActionHtml=paymentActions.map(b=>{
+   const due=paymentDueDate(b),overdue=due<today;
+   return '<div class="list-card task-card clickable" data-payment-action-booking="'+b.id+'"><div class="task-copy"><b>Outstanding payment due · '+money(paymentOutstanding(b))+'</b><div class="meta"><strong>'+esc(b.customer_name||'Unknown host')+'</strong>'+(b.event_name?' · '+esc(b.event_name):'')+' · due '+dmy(due)+'</div></div><span class="badge '+(overdue?'overdue':'awaiting')+'">'+(overdue?'OVERDUE':'DUE TODAY')+'</span></div>'
+ }).join('');
+ const normalTaskHtml=openTasks.map(t=>{
    const b=bookings.find(x=>x.id===t.booking_id);const overdue=t.due_date<today;
    return '<div class="list-card task-card"><label class="task-check"><input type="checkbox" data-complete-task="'+t.id+'"><span></span></label><div class="task-copy"><b>'+esc(t.title)+'</b><div class="meta"><strong>'+esc(b?.customer_name||'Unknown host')+'</strong>'+(b?.event_name?' · '+esc(b.event_name):'')+' · due '+dmy(t.due_date)+'</div></div><span class="badge '+(overdue?'overdue':'awaiting')+'">'+(overdue?'OVERDUE':'OPEN')+'</span></div>'
- }).join('')||'<p class="muted">Nothing outstanding.</p>';
+ }).join('');
+ $('dashboardTasks').innerHTML=(paymentActionHtml+normalTaskHtml)||'<p class="muted">Nothing outstanding.</p>';
  document.querySelectorAll('[data-complete-task]').forEach(x=>x.onchange=()=>setTaskCompleted(x.dataset.completeTask,true,x));
+ document.querySelectorAll('[data-payment-action-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.paymentActionBooking,false));
  document.querySelectorAll('[data-dashboard-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.dashboardBooking,true));
 }
 async function setTaskCompleted(id,isCompleted,input){
@@ -177,8 +187,8 @@ function renderEnquiries(){
  document.querySelectorAll('[data-decline]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();declineEnquiry(b.dataset.decline)});
 }
 function bookingListCard(b){
- const paid=totalPaid(b.id),out=Math.max(0,Number(b.total_amount||0)-paid),cancelled=b.booking_status==='cancelled';
- return '<div class="list-card clickable '+(cancelled?'cancelled-booking':'')+'" data-booking="'+b.id+'"><div class="row"><div><div class="event-name">'+esc(b.customer_name)+'</div><div class="meta">'+dmy(b.event_date)+' · '+esc(b.venue)+'<br>'+esc(b.event_name)+' · '+esc(b.guest_count||'—')+' guests · '+barLabel(b.bar_type)+'</div></div><span class="badge '+(cancelled?'overdue':'booked')+'">'+esc(b.booking_status.replaceAll('_',' ')).toUpperCase()+'</span></div><div class="booking-finance"><span>Paid <b>'+money(paid)+'</b></span><span>Outstanding <b class="'+(out>0?'balance-due':'balance-clear')+'">'+money(out)+'</b></span><span>Staff <b>'+esc(b.staff_required)+'</b></span></div><div class="actions"><button class="btn primary" data-edit-booking="'+b.id+'">Edit booking & payments</button>'+(cancelled?'':'<button class="btn red" data-cancel-booking="'+b.id+'">Cancel booking</button>')+'</div></div>';
+ const paid=totalPaid(b.id),out=Math.max(0,Number(b.total_amount||0)-paid),cancelled=b.booking_status==='cancelled',due=paymentDueDate(b);
+ return '<div class="list-card clickable '+(cancelled?'cancelled-booking':'')+'" data-booking="'+b.id+'"><div class="row"><div><div class="event-name">'+esc(b.customer_name)+'</div><div class="meta">'+dmy(b.event_date)+' · '+esc(b.venue)+'<br>'+esc(b.event_name)+' · '+esc(b.guest_count||'—')+' guests · '+barLabel(b.bar_type)+'</div></div><span class="badge '+(cancelled?'overdue':'booked')+'">'+esc(b.booking_status.replaceAll('_',' ')).toUpperCase()+'</span></div><div class="booking-finance"><span>Paid <b>'+money(paid)+'</b></span><span>Outstanding <b class="'+(out>0?'balance-due':'balance-clear')+'">'+money(out)+'</b></span><span>Payment due <b>'+dmy(due)+'</b></span><span>Minimum spend <b>'+money(b.minimum_spend||0)+'</b></span><span>Staff <b>'+esc(b.staff_required)+'</b></span></div><div class="actions"><button class="btn primary" data-edit-booking="'+b.id+'">Edit booking & payments</button>'+(cancelled?'':'<button class="btn red" data-cancel-booking="'+b.id+'">Cancel booking</button>')+'</div></div>';
 }
 function bookingYearSection(year,list,labelClass=''){
  const ordered=[...list].sort((a,b)=>a.event_date.localeCompare(b.event_date));
@@ -217,7 +227,9 @@ function renderCalendar(){
    const dayBookings=bookings.filter(b=>b.event_date===iso&&b.booking_status!=='cancelled');
    const dayEnquiries=enquiries.filter(e=>e.event_date===iso&&e.status!=='accepted'&&e.status!=='declined');
    const dayTasks=tasks.filter(t=>t.due_date===iso&&t.status==='open').filter(t=>bookings.some(b=>b.id===t.booking_id&&b.booking_status!=='cancelled'));
-   const taskIcons=dayTasks.map(t=>{const b=bookings.find(x=>x.id===t.booking_id);return '<button class="calendar-task-icon" data-task-booking="'+t.booking_id+'" data-task-id="'+t.id+'" title="'+esc((b?.customer_name||'Booking')+' — '+t.title)+'" aria-label="Task due">☑</button>'}).join('');
+   const paymentDueBookings=bookings.filter(b=>b.booking_status!=='cancelled'&&paymentDueDate(b)===iso&&paymentOutstanding(b)>0);
+   const taskIcons=dayTasks.map(t=>{const b=bookings.find(x=>x.id===t.booking_id);return '<button class="calendar-task-icon" data-task-booking="'+t.booking_id+'" data-task-id="'+t.id+'" title="'+esc((b?.customer_name||'Booking')+' — '+t.title)+'" aria-label="Task due">☑</button>'}).join('')+
+     paymentDueBookings.map(b=>'<button class="calendar-task-icon payment-due-icon" data-payment-due-booking="'+b.id+'" title="'+esc((b.customer_name||'Booking')+' — Outstanding payment '+money(paymentOutstanding(b))+' due')+'" aria-label="Outstanding payment due">£</button>').join('');
    const availabilityClass=dayBookings.length?(dayBookings.length>=3?'full':dayBookings.length===2?'limited':'available'):'';
    const availabilityLabel=dayBookings.length?dayBookings.length+' of 3 confirmed bookings used':'';
    const now=new Date(),todayIso=[now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');
@@ -229,6 +241,7 @@ function renderCalendar(){
  $('calendarGrid').innerHTML=html;
  document.querySelectorAll('[data-calendar-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.calendarBooking,true));
  document.querySelectorAll('[data-calendar-enquiry]').forEach(x=>x.onclick=()=>openEnquiryDetail(x.dataset.calendarEnquiry));
+ document.querySelectorAll('[data-payment-due-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.paymentDueBooking,false));
  document.querySelectorAll('[data-task-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.taskBooking,false,x.dataset.taskId));
 }
 async function refreshTeamAccountStatus(){
