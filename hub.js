@@ -377,7 +377,7 @@ function renderTeam(){
  combined.forEach(r=>{r.profile=profileByEmail.get(String(r.email||'').trim().toLowerCase())||r.profile});
  const pending=staffProfiles.filter(p=>p.role==='staff'&&!['approved','inactive'].includes(p.registration_status));
  const former=combined.filter(r=>r.is_archived||r.profile?.registration_status==='inactive');
- const active=combined.filter(r=>!r.is_archived&&r.profile?.registration_status!=='inactive');
+ const active=combined.filter(r=>!r.is_archived&&(!r.profile||r.profile.registration_status==='approved'));
  const query=String($('teamSearch')?.value||'').trim().toLowerCase();
  const activeFiltered=active.filter(r=>!query||[teamDisplayName(r),r.email,r.phone,JSON.stringify(r.raw_data||{})].some(v=>String(v||'').toLowerCase().includes(query)));
  const latest=staffInformation.map(r=>r.synced_at).filter(Boolean).sort().at(-1);
