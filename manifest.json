@@ -1,13 +1,43 @@
 {
-  "name": "Knights Staff",
-  "short_name": "Knights Staff",
-  "start_url": "./staffing.html",
+  "name": "KMB.Hub",
+  "short_name": "KMB.Hub",
+  "description": "Knights Mobile Bars operations hub for bookings, staffing, stock and support.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#f6f1e8",
   "theme_color": "#171716",
+  "orientation": "any",
   "icons": [
-    {"src":"./logo.png","sizes":"512x512","type":"image/png","purpose":"any maskable"},
-    {"src":"./logo-exact.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}
+    {
+      "src": "./logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./logo-exact.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
   ],
-  "logo_version": "2026-08-30-2"
+  "shortcuts": [
+    {
+      "name": "Staffing",
+      "short_name": "Staffing",
+      "url": "./hub.html?view=staffing"
+    },
+    {
+      "name": "Bookings",
+      "short_name": "Bookings",
+      "url": "./hub.html?view=bookings"
+    },
+    {
+      "name": "Enquiries",
+      "short_name": "Enquiries",
+      "url": "./hub.html?view=enquiries"
+    }
+  ]
 }
