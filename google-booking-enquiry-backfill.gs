@@ -5,7 +5,7 @@
  * the Google Sheet that contains the "Events" tab.
  *
  * Requirements:
- * - Script Property KMB_BOOKING_WEBHOOK_SECRET must contain the same secret
+ * - Script Property KNIGHTS_WEBHOOK_SECRET must contain the same secret
  *   used by the existing KMB booking enquiry webhook.
  *
  * The script sends rows 105 and 106 through the same Supabase endpoint used
@@ -20,10 +20,10 @@ function importEventsRows105And106() {
   if (!sheet) throw new Error('Could not find a sheet named "Events".');
 
   const secret = PropertiesService.getScriptProperties()
-    .getProperty('KMB_BOOKING_WEBHOOK_SECRET');
+    .getProperty('KNIGHTS_WEBHOOK_SECRET');
   if (!secret) {
     throw new Error(
-      'Missing Script Property KMB_BOOKING_WEBHOOK_SECRET. Add the existing booking webhook secret in Apps Script > Project Settings > Script Properties.'
+      'Missing Script Property KNIGHTS_WEBHOOK_SECRET. Add the existing booking webhook secret in Apps Script > Project Settings > Script Properties.'
     );
   }
 
