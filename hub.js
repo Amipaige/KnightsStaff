@@ -3,7 +3,7 @@ const URL='https://jpjrsndbjklecvwiuvbf.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwanJzbmRiamtsZWN2d2l1dmJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY1MzQ1MTQsImV4cCI6MjEwMjExMDUxNH0.KrNOCgc71pyc7vNgWdy9juQCz5PiEl0oIQ52QFv-9FE';
 const db=window.supabase.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const $=id=>document.getElementById(id);
-let me=null,profile=null,bookings=[],enquiries=[],payments=[],tasks=[],checklistItems=[],staffingEvents=[],staffingSignups=[],supportTickets=[],staffInformation=[],calendarCursor=new Date();
+let me=null,profile=null,bookings=[],enquiries=[],payments=[],tasks=[],checklistItems=[],staffingEvents=[],staffingSignups=[],supportTickets=[],staffInformation=[],teamAccountEmails=new Set(),calendarCursor=new Date();
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>'£'+Number(n||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
 const dmy=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
@@ -68,7 +68,7 @@ async function refreshAdminData(){
  ]);
  for(const x of [b,e,p,t,c,si])if(x.error)throw x.error;
  bookings=b.data||[];enquiries=e.data||[];payments=p.data||[];tasks=t.data||[];checklistItems=c.data||[];staffInformation=si.data||[];
- await Promise.all([refreshStaffingSummary(),refreshBackupStatus()]);
+ await Promise.all([refreshStaffingSummary(),refreshBackupStatus(),refreshTeamAccountStatus()]);
  renderDashboard();renderEnquiries();renderBookings();renderCalendar();renderTeam();
 }
 function totalPaid(bookingId){return payments.filter(p=>p.booking_id===bookingId).reduce((s,p)=>s+Number(p.amount||0),0)}
@@ -224,6 +224,47 @@ function renderCalendar(){
  document.querySelectorAll('[data-calendar-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.calendarBooking,true));
  document.querySelectorAll('[data-task-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.taskBooking,false,x.dataset.taskId));
 }
+async function refreshTeamAccountStatus(){
+ if(profile?.role!=='admin'){teamAccountEmails=new Set();return}
+ const emails=staffInformation.map(r=>String(r.email||'').trim().toLowerCase()).filter(Boolean);
+ if(!emails.length){teamAccountEmails=new Set();return}
+ try{
+   const {data:{session},error:sessionError}=await db.auth.getSession();
+   if(sessionError)throw sessionError;
+   if(!session?.access_token)throw new Error('Admin session expired.');
+   const response=await fetch(URL+'/functions/v1/team-account-actions',{
+     method:'POST',
+     headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':KEY},
+     body:JSON.stringify({action:'status',emails})
+   });
+   const body=await response.json().catch(()=>({}));
+   if(!response.ok)throw new Error(body.error||'Could not check KMB.Hub accounts.');
+   teamAccountEmails=new Set((body.existing_emails||[]).map(x=>String(x).toLowerCase()));
+ }catch(e){
+   console.warn('Team account status:',e);
+   teamAccountEmails=new Set();
+ }
+}
+async function inviteTeamMember(email,name){
+ if(!email)return;
+ if(!confirm('Send a KMB.Hub invitation to '+email+'?'))return;
+ try{
+   const {data:{session},error:sessionError}=await db.auth.getSession();
+   if(sessionError)throw sessionError;
+   if(!session?.access_token)throw new Error('Your admin session has expired. Please sign in again.');
+   const response=await fetch(URL+'/functions/v1/team-account-actions',{
+     method:'POST',
+     headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':KEY},
+     body:JSON.stringify({action:'invite',email,name})
+   });
+   const body=await response.json().catch(()=>({}));
+   if(!response.ok)throw new Error(body.error||'Could not send invitation.');
+   alert('KMB.Hub invitation sent to '+email+'.');
+ }catch(e){
+   alert(e.message||'Could not send invitation.');
+ }
+}
+window.inviteTeamMember=inviteTeamMember;
 function staffInfoEntries(row){
  const raw=row?.raw_data&&typeof row.raw_data==='object'?row.raw_data:{};
  const common=/^(email|e-?mail|email address|full ?name|name|phone|mobile|telephone|contact number|timestamp|source_updated_at)$/i;
@@ -247,10 +288,12 @@ function renderTeam(){
  if(!rows.length){host.innerHTML='<p class="muted">'+(staffInformation.length?'No matching staff.':'No staff information has synced from Google Sheets yet.')+'</p>';return}
  host.innerHTML='<div class="team-grid">'+rows.map(r=>{
    const extras=staffInfoEntries(r);
-   return '<article class="team-card"><div class="team-card-head"><div><h3>'+esc(r.full_name||'Unnamed staff member')+'</h3><div class="small muted">Synced '+(r.synced_at?new Date(r.synced_at).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—')+'</div></div></div><div class="team-primary">'+
-     (r.email?'<div><span>Email</span><a href="mailto:'+encodeURIComponent(r.email)+'">'+esc(r.email)+'</a></div>':'')+
+   const raw=r.raw_data||{},first=String(raw['First name?']||'').trim(),last=String(raw['Last name?']||'').trim(),displayName=(first||last)?[first,last].filter(Boolean).join(' '):(r.full_name||'Unnamed staff member'),email=String(r.email||'').trim(),signedUp=teamAccountEmails.has(email.toLowerCase());
+   return '<article class="team-card"><div class="team-card-head"><div><h3>'+esc(displayName)+'</h3><div class="small muted">Synced '+(r.synced_at?new Date(r.synced_at).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—')+'</div></div><span class="badge '+(signedUp?'booked':'awaiting')+'">'+(signedUp?'KMB.Hub account active':'Not signed up')+'</span></div><div class="team-primary">'+
+     (email?'<div><span>Email</span><a href="mailto:'+encodeURIComponent(email)+'">'+esc(email)+'</a></div>':'')+
      (r.phone?'<div><span>Phone</span><a href="tel:'+esc(String(r.phone).replace(/[^+\d]/g,''))+'">'+esc(r.phone)+'</a></div>':'')+
-     '</div>'+(extras.length?'<details class="team-details"><summary>View all staff information</summary><div class="team-info-grid">'+extras.map(([k,v])=>'<div class="team-info-row"><span>'+esc(k)+'</span><b>'+teamContactValue(v)+'</b></div>').join('')+'</div></details>':'<p class="small muted">No additional form details synced yet.</p>')+'</article>';
+     '</div>'+(!signedUp&&email?'<button class="btn gold compact team-invite-btn" type="button" onclick="inviteTeamMember(\''+esc(email.replaceAll("'","&#39;"))+'\',\''+esc(displayName.replaceAll("'","&#39;"))+'\')">Invite to KMB.Hub</button>':'')+
+     (extras.length?'<details class="team-details"><summary>View all staff information</summary><div class="team-info-grid">'+extras.map(([k,v])=>'<div class="team-info-row"><span>'+esc(k)+'</span><b>'+teamContactValue(v)+'</b></div>').join('')+'</div></details>':'<p class="small muted">No additional form details synced yet.</p>')+'</article>';
  }).join('')+'</div>';
 }
 function requirementRows(obj){
