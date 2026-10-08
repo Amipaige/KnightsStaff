@@ -30,3 +30,13 @@
 
 .team-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0 16px}.team-toolbar input{max-width:420px}.team-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.team-card{border:1px solid var(--line);border-radius:14px;padding:15px;background:#fff}.team-card-head h3{font:20px Georgia,serif;font-weight:500;margin:0 0 4px}.team-primary{display:grid;gap:8px;margin:14px 0}.team-primary>div,.team-info-row{display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:start}.team-primary span,.team-info-row span{font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em}.team-primary a,.team-contact-link{color:var(--ink);font-weight:700;text-decoration:underline;text-underline-offset:2px;word-break:break-word}.team-details{border-top:1px solid var(--line);padding-top:10px}.team-details summary{cursor:pointer;font-weight:800;font-size:13px}.team-info-grid{display:grid;gap:9px;margin-top:11px}.team-info-row b{font-size:13px;font-weight:600;white-space:pre-wrap;word-break:break-word}
 @media(max-width:800px){.team-grid{grid-template-columns:1fr}.team-toolbar{align-items:stretch;flex-direction:column}.team-toolbar input{max-width:none}.team-primary>div,.team-info-row{grid-template-columns:90px 1fr}}
+
+.team-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.team-actions{margin:8px 0 12px}
+.team-actions .btn{width:auto}
+.former-team-panel summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;font:20px Georgia,serif;font-weight:500;list-style:none}
+.former-team-panel summary::-webkit-details-marker{display:none}
+.former-team-panel summary:after{content:"⌄";font-family:Arial,sans-serif;font-size:18px;margin-left:8px}
+.former-team-panel[open] summary:after{content:"⌃"}
+.former-team-panel summary b{display:inline-grid;place-items:center;min-width:28px;height:28px;border-radius:999px;background:#f1ebe2;font:12px Arial,sans-serif}
+.team-stats .stat-card:nth-child(3){cursor:pointer}
