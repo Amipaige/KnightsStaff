@@ -723,6 +723,7 @@ $('teamSavePasswordBtn')?.addEventListener('click',saveTeamPassword);
 $('teamShiftRequestsCard')?.addEventListener('click',()=>{switchView('staffing');setTimeout(()=>{try{$('staffingFrame')?.contentWindow?.postMessage({type:'knights-show-admin'},window.location.origin)}catch(_){}},150)});
 $('teamShiftRequestsCard')?.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('teamShiftRequestsCard').click()}});
 $('prevMonth').onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()-1,1);renderCalendar()};
+$('todayBtn')?.addEventListener('click',()=>{const now=new Date();calendarCursor=new Date(now.getFullYear(),now.getMonth(),1);renderCalendar()});
 $('nextMonth').onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()+1,1);renderCalendar()};
 $('staffingFrame')?.addEventListener('load',()=>{if(!$('staffingView')?.classList.contains('hidden')){try{$('staffingFrame').contentWindow?.postMessage({type:'knights-show-shifts'},window.location.origin)}catch(_){}}});
 window.addEventListener('message',e=>{
