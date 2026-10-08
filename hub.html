@@ -4,16 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#171716">
-  <title>Knights Hub</title>
+  <title>KMB.Hub</title>
   <link rel="icon" href="logo-exact.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="logo.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="KMB.Hub">
   <link rel="stylesheet" href="hub.css?v=20261008-3">
 </head>
 <body>
   <div id="authScreen" class="auth-shell">
     <div class="auth-card">
       <img src="logo-exact.svg" alt="Knights Mobile Bars" class="auth-logo">
-      <div class="eyebrow">KNIGHTS HUB</div>
+      <div class="eyebrow">KMB.HUB</div>
       <h1>Welcome back</h1>
       <p class="muted">One login for bookings, staffing and stock.</p>
       <label>Email</label>
@@ -32,7 +36,7 @@
     <aside class="sidebar">
       <div class="brand-wrap">
         <img src="logo-exact.svg" alt="Knights Mobile Bars" class="side-logo">
-        <div class="eyebrow">KNIGHTS HUB</div>
+        <div class="eyebrow">KMB.HUB</div>
       </div>
       <nav id="mainNav">
         <button data-view="dashboard" class="nav-btn admin-only active">Dashboard</button>
@@ -45,6 +49,7 @@
       </nav>
       <div class="sidebar-foot">
         <div id="userSummary" class="small"></div>
+        <button id="installAppBtn" class="btn ghost hidden" type="button">Install KMB.Hub</button>
         <button id="logoutBtn" class="btn ghost">Log out</button>
       </div>
     </aside>
