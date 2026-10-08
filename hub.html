@@ -7,7 +7,7 @@
   <title>Knights Hub</title>
   <link rel="icon" href="logo-exact.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="logo.png">
-  <link rel="stylesheet" href="hub.css?v=20261007-14">
+  <link rel="stylesheet" href="hub.css?v=20261008-1">
 </head>
 <body>
   <div id="authScreen" class="auth-shell">
@@ -40,6 +40,7 @@
         <button data-view="bookings" class="nav-btn admin-only">Bookings</button>
         <button data-view="calendar" class="nav-btn admin-only">Calendar</button>
         <button data-view="staffing" class="nav-btn">Staffing</button>
+        <button data-view="support" class="nav-btn">Support</button>
         <button data-view="stock" class="nav-btn admin-only">Stock</button>
       </nav>
       <div class="sidebar-foot">
@@ -118,7 +119,36 @@
 
       <section id="staffingView" class="view hidden">
         <div class="panel flush">
-          <iframe id="staffingFrame" title="Knights Staffing" src="staffing.html?v=20261007-9"></iframe>
+          <iframe id="staffingFrame" title="Knights Staffing" src="staffing.html?v=20261008-1"></iframe>
+        </div>
+      </section>
+
+      <section id="supportView" class="view hidden">
+        <div class="two-col support-layout">
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Support</h2><p class="muted">Something not working? Send a ticket and include as much detail as you can.</p></div>
+            </div>
+            <label>Category</label>
+            <select id="supportCategory">
+              <option value="app_issue">App issue</option>
+              <option value="login">Login</option>
+              <option value="staffing">Staffing</option>
+              <option value="bookings">Bookings</option>
+              <option value="stock">Stock</option>
+              <option value="other">Other</option>
+            </select>
+            <label>Subject</label>
+            <input id="supportSubject" maxlength="120" placeholder="Briefly describe the problem">
+            <label>What happened?</label>
+            <textarea id="supportDescription" maxlength="4000" placeholder="Tell us what you were trying to do, what happened, and any error message you saw."></textarea>
+            <button id="supportSubmitBtn" class="btn primary">Submit support ticket</button>
+            <p id="supportMsg" class="msg"></p>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><div><h2 id="supportTicketsTitle">My tickets</h2><p class="muted">Recent support requests and their status.</p></div></div>
+            <div id="supportTicketsList"><p class="muted">Open Support to load tickets.</p></div>
+          </article>
         </div>
       </section>
 
@@ -279,6 +309,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
-  <script src="hub.js?v=20261007-16"></script>
+  <script src="hub.js?v=20261008-1"></script>
 </body>
 </html>
