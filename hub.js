@@ -3,7 +3,7 @@ const URL='https://jpjrsndbjklecvwiuvbf.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwanJzbmRiamtsZWN2d2l1dmJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY1MzQ1MTQsImV4cCI6MjEwMjExMDUxNH0.KrNOCgc71pyc7vNgWdy9juQCz5PiEl0oIQ52QFv-9FE';
 const db=window.supabase.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const $=id=>document.getElementById(id);
-let me=null,profile=null,bookings=[],enquiries=[],payments=[],tasks=[],checklistItems=[],staffingEvents=[],staffingSignups=[],supportTickets=[],staffInformation=[],teamAccountEmails=new Set(),calendarCursor=new Date();
+let me=null,profile=null,bookings=[],enquiries=[],payments=[],tasks=[],checklistItems=[],staffingEvents=[],staffingSignups=[],supportTickets=[],staffInformation=[],staffProfiles=[],teamAccountEmails=new Set(),calendarCursor=new Date();
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>'£'+Number(n||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
 const dmy=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
@@ -58,16 +58,17 @@ async function refreshBackupStatus(){
  el.textContent='Last Google backup: '+when;
 }
 async function refreshAdminData(){
- const [b,e,p,t,c,si]=await Promise.all([
+ const [b,e,p,t,c,si,sp]=await Promise.all([
    db.from('bookings').select('*').order('event_date',{ascending:true}),
    db.from('booking_enquiries').select('*').order('created_at',{ascending:false}),
    db.from('booking_payments').select('*').order('paid_at',{ascending:false}),
    db.from('booking_tasks').select('*').order('due_date',{ascending:true}),
    db.from('booking_checklist_items').select('*').order('sort_order',{ascending:true}),
-   db.from('staff_information').select('*').order('full_name',{ascending:true})
+   db.from('staff_information').select('*').order('full_name',{ascending:true}),
+   db.from('staff_profiles').select('id,full_name,email,role,registration_status,approval_notification_sent_at,approval_notification_error').order('full_name',{ascending:true})
  ]);
- for(const x of [b,e,p,t,c,si])if(x.error)throw x.error;
- bookings=b.data||[];enquiries=e.data||[];payments=p.data||[];tasks=t.data||[];checklistItems=c.data||[];staffInformation=si.data||[];
+ for(const x of [b,e,p,t,c,si,sp])if(x.error)throw x.error;
+ bookings=b.data||[];enquiries=e.data||[];payments=p.data||[];tasks=t.data||[];checklistItems=c.data||[];staffInformation=si.data||[];staffProfiles=sp.data||[];
  await Promise.all([refreshStaffingSummary(),refreshBackupStatus(),refreshTeamAccountStatus()]);
  renderDashboard();renderEnquiries();renderBookings();renderCalendar();renderTeam();
 }
@@ -278,23 +279,116 @@ function teamContactValue(v){
  if(isPhoneValue(value))return '<a class="team-contact-link" href="tel:'+esc(value.replace(/[^+\d]/g,''))+'">'+esc(value)+'</a>';
  return esc(value);
 }
+async function approveTeamStaff(id){
+ const staff=staffProfiles.find(p=>p.id===id);if(!staff)return;
+ if(!confirm('Approve '+(staff.full_name||staff.email)+' so they can start requesting shifts?'))return;
+ try{
+   const {data:{session},error:sessionError}=await db.auth.getSession();if(sessionError)throw sessionError;
+   if(!session?.access_token)throw new Error('Your admin session has expired. Please sign in again.');
+   const response=await fetch(URL+'/functions/v1/approve-staff-member',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':KEY},body:JSON.stringify({staff_id:id})});
+   const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'Could not approve staff account.');
+   await refreshAdminData();
+   alert(body.email_sent?(staff.full_name||'Staff member')+' is approved and has been emailed.':(staff.full_name||'Staff member')+' is approved, but the email could not be sent'+(body.email_error?': '+body.email_error:'.'));
+ }catch(e){alert(e.message||'Could not approve staff account.')}
+}
+window.approveTeamStaff=approveTeamStaff;
+
+async function declineTeamStaff(id){
+ const staff=staffProfiles.find(p=>p.id===id);if(!staff)return;
+ if(!confirm('Move '+(staff.full_name||staff.email)+' back to not completed?'))return;
+ const r=await db.from('staff_profiles').update({registration_status:'not_completed'}).eq('id',id);
+ if(r.error)return alert(r.error.message);
+ await refreshAdminData();
+}
+window.declineTeamStaff=declineTeamStaff;
+
+async function setTeamArchive(email,restore=false){
+ const action=restore?'restore':'archive';
+ if(!confirm((restore?'Restore ':'Move ')+email+(restore?' to the active team?':' to Former staff? Their history will be kept.')))return;
+ try{
+   const {data:{session},error:sessionError}=await db.auth.getSession();if(sessionError)throw sessionError;
+   if(!session?.access_token)throw new Error('Your admin session has expired. Please sign in again.');
+   const response=await fetch(URL+'/functions/v1/team-account-actions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':KEY},body:JSON.stringify({action,email})});
+   const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'Could not update this staff member.');
+   await refreshAdminData();
+ }catch(e){alert(e.message||'Could not update this staff member.')}
+}
+window.archiveTeamMember=email=>setTeamArchive(email,false);
+window.restoreTeamMember=email=>setTeamArchive(email,true);
+
+function openTeamPasswordReset(profileId){
+ const p=staffProfiles.find(x=>x.id===profileId);if(!p)return;
+ $('teamPasswordUserId').value=profileId;
+ $('teamPasswordName').textContent=(p.full_name||p.email)+' · '+p.email;
+ $('teamNewPassword').value='';$('teamConfirmPassword').value='';$('teamPasswordMsg').textContent='';
+ openModal('teamPasswordModal');
+}
+window.openTeamPasswordReset=openTeamPasswordReset;
+
+async function saveTeamPassword(){
+ const id=$('teamPasswordUserId').value,password=$('teamNewPassword').value,confirmPassword=$('teamConfirmPassword').value;
+ if(password.length<8)return $('teamPasswordMsg').textContent='Password must be at least 8 characters.';
+ if(password!==confirmPassword)return $('teamPasswordMsg').textContent='Passwords do not match.';
+ $('teamSavePasswordBtn').disabled=true;$('teamPasswordMsg').textContent='Saving…';
+ try{
+   const {data:{session},error:sessionError}=await db.auth.getSession();if(sessionError)throw sessionError;
+   if(!session?.access_token)throw new Error('Your admin session has expired. Please sign in again.');
+   const response=await fetch(URL+'/functions/v1/admin-reset-staff-password',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':KEY},body:JSON.stringify({action:'reset',user_id:id,password})});
+   const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'Could not change password.');
+   $('teamPasswordMsg').textContent='Password changed successfully.';
+   setTimeout(closeModals,700);
+ }catch(e){$('teamPasswordMsg').textContent=e.message||'Could not change password.'}
+ finally{$('teamSavePasswordBtn').disabled=false}
+}
+
+function teamDisplayName(row){
+ const raw=row?.raw_data||{},first=String(raw['First name?']||'').trim(),last=String(raw['Last name?']||'').trim();
+ return (first||last)?[first,last].filter(Boolean).join(' '):(row?.full_name||'Unnamed staff member');
+}
+function combinedTeamRows(){
+ const byEmail=new Map();
+ staffInformation.forEach(r=>byEmail.set(String(r.email||'').trim().toLowerCase(),{...r}));
+ staffProfiles.filter(p=>p.role==='staff').forEach(p=>{
+   const email=String(p.email||'').trim().toLowerCase();
+   if(!email)return;
+   if(byEmail.has(email))byEmail.set(email,{...byEmail.get(email),profile_id:p.id,profile:p});
+   else byEmail.set(email,{id:'profile-'+p.id,profile_id:p.id,full_name:p.full_name,email:p.email,phone:null,raw_data:{},synced_at:null,is_archived:p.registration_status==='inactive',profile:p});
+ });
+ return [...byEmail.values()];
+}
+function renderTeamCard(r,former=false){
+ const extras=staffInfoEntries(r),displayName=teamDisplayName(r),email=String(r.email||'').trim(),p=r.profile||staffProfiles.find(x=>String(x.email||'').toLowerCase()===email.toLowerCase()),signedUp=teamAccountEmails.has(email.toLowerCase()),inactive=former||r.is_archived||p?.registration_status==='inactive';
+ const accountBadge=inactive?'<span class="badge">Former staff</span>':'<span class="badge '+(signedUp?'booked':'awaiting')+'">'+(signedUp?'KMB.Hub account active':'Not signed up')+'</span>';
+ const buttons=inactive
+   ? '<button class="btn green compact" type="button" onclick="restoreTeamMember(\''+esc(email)+'\')">Restore to active team</button>'
+   : ((signedUp&&p?.id)?'<button class="btn gold compact" type="button" onclick="openTeamPasswordReset(\''+p.id+'\')">Reset password</button>':'')+
+     (!signedUp&&email?'<button class="btn gold compact" type="button" onclick="inviteTeamMember(\''+esc(email)+'\',\''+esc(displayName.replaceAll("'","&#39;"))+'\')">Invite to KMB.Hub</button>':'')+
+     '<button class="btn red compact" type="button" onclick="archiveTeamMember(\''+esc(email)+'\')">Move to former staff</button>';
+ return '<article class="team-card"><div class="team-card-head"><div><h3>'+esc(displayName)+'</h3><div class="small muted">'+(r.synced_at?'Synced '+new Date(r.synced_at).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'KMB.Hub staff record')+'</div></div>'+accountBadge+'</div><div class="team-primary">'+
+   (email?'<div><span>Email</span><a href="mailto:'+encodeURIComponent(email)+'">'+esc(email)+'</a></div>':'')+
+   (r.phone?'<div><span>Phone</span><a href="tel:'+esc(String(r.phone).replace(/[^+\d]/g,''))+'">'+esc(r.phone)+'</a></div>':'')+
+   '</div><div class="actions team-actions">'+buttons+'</div>'+
+   (extras.length?'<details class="team-details"><summary>View all staff information</summary><div class="team-info-grid">'+extras.map(([k,v])=>'<div class="team-info-row"><span>'+esc(k)+'</span><b>'+teamContactValue(v)+'</b></div>').join('')+'</div></details>':'<p class="small muted">No additional form details synced yet.</p>')+'</article>';
+}
 function renderTeam(){
  const host=$('teamList');if(!host)return;
+ const combined=combinedTeamRows();
+ const profileByEmail=new Map(staffProfiles.filter(p=>p.role==='staff').map(p=>[String(p.email||'').trim().toLowerCase(),p]));
+ combined.forEach(r=>{r.profile=profileByEmail.get(String(r.email||'').trim().toLowerCase())||r.profile});
+ const pending=staffProfiles.filter(p=>p.role==='staff'&&!['approved','inactive'].includes(p.registration_status));
+ const former=combined.filter(r=>r.is_archived||r.profile?.registration_status==='inactive');
+ const active=combined.filter(r=>!r.is_archived&&r.profile?.registration_status!=='inactive');
  const query=String($('teamSearch')?.value||'').trim().toLowerCase();
- const rows=staffInformation.filter(r=>!query||[r.full_name,r.email,r.phone,JSON.stringify(r.raw_data||{})].some(v=>String(v||'').toLowerCase().includes(query)));
+ const activeFiltered=active.filter(r=>!query||[teamDisplayName(r),r.email,r.phone,JSON.stringify(r.raw_data||{})].some(v=>String(v||'').toLowerCase().includes(query)));
  const latest=staffInformation.map(r=>r.synced_at).filter(Boolean).sort().at(-1);
- const status=$('teamSyncStatus');
- if(status)status.textContent=staffInformation.length?(staffInformation.length+' staff record'+(staffInformation.length===1?'':'s')+(latest?' · Last synced '+new Date(latest).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'')):'Waiting for staff information sync';
- if(!rows.length){host.innerHTML='<p class="muted">'+(staffInformation.length?'No matching staff.':'No staff information has synced from Google Sheets yet.')+'</p>';return}
- host.innerHTML='<div class="team-grid">'+rows.map(r=>{
-   const extras=staffInfoEntries(r);
-   const raw=r.raw_data||{},first=String(raw['First name?']||'').trim(),last=String(raw['Last name?']||'').trim(),displayName=(first||last)?[first,last].filter(Boolean).join(' '):(r.full_name||'Unnamed staff member'),email=String(r.email||'').trim(),signedUp=teamAccountEmails.has(email.toLowerCase());
-   return '<article class="team-card"><div class="team-card-head"><div><h3>'+esc(displayName)+'</h3><div class="small muted">Synced '+(r.synced_at?new Date(r.synced_at).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—')+'</div></div><span class="badge '+(signedUp?'booked':'awaiting')+'">'+(signedUp?'KMB.Hub account active':'Not signed up')+'</span></div><div class="team-primary">'+
-     (email?'<div><span>Email</span><a href="mailto:'+encodeURIComponent(email)+'">'+esc(email)+'</a></div>':'')+
-     (r.phone?'<div><span>Phone</span><a href="tel:'+esc(String(r.phone).replace(/[^+\d]/g,''))+'">'+esc(r.phone)+'</a></div>':'')+
-     '</div>'+(!signedUp&&email?'<button class="btn gold compact team-invite-btn" type="button" onclick="inviteTeamMember(\''+esc(email.replaceAll("'","&#39;"))+'\',\''+esc(displayName.replaceAll("'","&#39;"))+'\')">Invite to KMB.Hub</button>':'')+
-     (extras.length?'<details class="team-details"><summary>View all staff information</summary><div class="team-info-grid">'+extras.map(([k,v])=>'<div class="team-info-row"><span>'+esc(k)+'</span><b>'+teamContactValue(v)+'</b></div>').join('')+'</div></details>':'<p class="small muted">No additional form details synced yet.</p>')+'</article>';
- }).join('')+'</div>';
+ $('teamActiveCount').textContent=active.length;
+ $('teamPendingCount').textContent=pending.length;
+ $('teamShiftRequestCount').textContent=staffingSignups.filter(s=>s.status==='pending'&&staffingEvents.some(e=>e.id===s.event_id)).length;
+ $('formerTeamCount').textContent=former.length;
+ const status=$('teamSyncStatus');if(status)status.textContent=staffInformation.length?(staffInformation.length+' synced record'+(staffInformation.length===1?'':'s')+(latest?' · Last synced '+new Date(latest).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'')):'Waiting for staff information sync';
+ $('teamApprovalList').innerHTML=pending.length?pending.map(p=>'<div class="list-card"><div class="row"><div><b>'+esc(p.full_name||p.email)+'</b><div class="meta">'+esc(p.email)+' · '+esc(String(p.registration_status||'').replaceAll('_',' '))+'</div></div><div class="actions"><button class="btn green compact" type="button" onclick="approveTeamStaff(\''+p.id+'\')">Approve</button><button class="btn red compact" type="button" onclick="declineTeamStaff(\''+p.id+'\')">Decline</button></div></div></div>').join(''):'<p class="muted">No staff waiting for approval.</p>';
+ host.innerHTML=activeFiltered.length?'<div class="team-grid">'+activeFiltered.map(r=>renderTeamCard(r,false)).join('')+'</div>':'<p class="muted">'+(active.length?'No matching staff.':'No active staff records yet.')+'</p>';
+ $('formerTeamList').innerHTML=former.length?'<div class="team-grid">'+former.map(r=>renderTeamCard(r,true)).join('')+'</div>':'<p class="muted">No former staff.</p>';
 }
 function requirementRows(obj){
  const entries=Object.entries(obj||{}).filter(([q,a])=>String(q).trim()&&String(a??'').trim());
@@ -585,6 +679,9 @@ $('saveEnquiryBtn').onclick=saveEnquiry;$('confirmAcceptBtn').onclick=acceptBook
 document.querySelectorAll('[data-close-modal]').forEach(b=>b.onclick=closeModals);
 document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModals()}));
 $('teamSearch')?.addEventListener('input',renderTeam);
+$('teamSavePasswordBtn')?.addEventListener('click',saveTeamPassword);
+$('teamShiftRequestsCard')?.addEventListener('click',()=>{switchView('staffing');setTimeout(()=>{try{$('staffingFrame')?.contentWindow?.postMessage({type:'knights-show-admin'},window.location.origin)}catch(_){}},150)});
+$('teamShiftRequestsCard')?.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('teamShiftRequestsCard').click()}});
 $('prevMonth').onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()-1,1);renderCalendar()};
 $('nextMonth').onclick=()=>{calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()+1,1);renderCalendar()};
 $('staffingFrame')?.addEventListener('load',()=>{if(!$('staffingView')?.classList.contains('hidden')){try{$('staffingFrame').contentWindow?.postMessage({type:'knights-show-shifts'},window.location.origin)}catch(_){}}});
