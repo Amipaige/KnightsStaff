@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="KMB.Hub">
-  <link rel="stylesheet" href="hub.css?v=20261008-10">
+  <link rel="stylesheet" href="hub.css?v=20261009-1">
 </head>
 <body>
   <div id="authScreen" class="auth-shell">
@@ -337,6 +337,15 @@
       </div>
       <p id="bookingEditMsg" class="msg"></p>
 
+      <h3>Event images</h3>
+      <p class="muted">Upload venue photos, layout ideas, setup references or anything useful for this event.</p>
+      <div class="booking-image-upload">
+        <input id="bookingImageInput" type="file" accept="image/*" multiple>
+        <button id="uploadBookingImagesBtn" class="btn gold" type="button">Upload images</button>
+      </div>
+      <p id="bookingImageMsg" class="msg"></p>
+      <div id="bookingImageGallery" class="booking-image-gallery"></div>
+
       <h3>Payments</h3>
       <div id="paymentHistory" class="payment-history"></div>
       <div class="payment-entry">
@@ -373,6 +382,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
-  <script src="hub.js?v=20261008-12"></script>
+  <script src="hub.js?v=20261009-1"></script>
 </body>
 </html>
