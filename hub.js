@@ -243,19 +243,20 @@ function bookingListCard(b){
  const paid=totalPaid(b.id),out=Math.max(0,Number(b.total_amount||0)-paid),cancelled=b.booking_status==='cancelled',due=paymentDueDate(b),eventType=bookingEventType(b);
  return '<div class="list-card clickable '+(cancelled?'cancelled-booking':'')+'" data-booking="'+b.id+'"><div class="row"><div><div class="event-name">'+esc(b.customer_name||b.event_name||'Booking')+'</div><div class="meta">'+dmy(b.event_date)+' · '+esc(b.venue)+'<br>'+esc(eventType)+' · '+esc(b.guest_count||'—')+' guests · '+barLabel(b.bar_type)+'</div></div><span class="badge '+(cancelled?'overdue':'booked')+'">'+esc(b.booking_status.replaceAll('_',' ')).toUpperCase()+'</span></div><div class="booking-finance"><span>Paid <b>'+money(paid)+'</b></span><span>Outstanding <b class="'+(out>0?'balance-due':'balance-clear')+'">'+money(out)+'</b></span><span>Payment due <b>'+dmy(due)+'</b></span><span>Minimum spend <b>'+money(b.minimum_spend||0)+'</b></span><span>Staff <b>'+esc(b.staff_required)+'</b></span></div><div class="actions"><button class="btn primary" data-edit-booking="'+b.id+'">Edit booking & payments</button>'+(cancelled?'':'<button class="btn red" data-cancel-booking="'+b.id+'">Cancel booking</button>')+'</div></div>';
 }
-function bookingYearSection(year,list,labelClass=''){
+function bookingYearSection(year,list,labelClass='',isOpen=false){
  const ordered=[...list].sort((a,b)=>a.event_date.localeCompare(b.event_date));
- return '<details class="booking-year-section '+labelClass+'"><summary><span>'+year+' bookings</span><b>'+ordered.length+'</b></summary><div class="booking-year-body">'+ordered.map(bookingListCard).join('')+'</div></details>';
+ return '<details class="booking-year-section '+labelClass+'" data-booking-year="'+year+'"'+(isOpen?' open':'')+'><summary><span>'+year+' bookings</span><b>'+ordered.length+'</b></summary><div class="booking-year-body">'+ordered.map(bookingListCard).join('')+'</div></details>';
 }
 function renderBookings(){
+ const openYears=new Set([...document.querySelectorAll('#bookingList details.booking-year-section[open][data-booking-year]')].map(x=>String(x.dataset.bookingYear)));
  const now=new Date(),currentYear=now.getFullYear();
  const active=bookings.filter(b=>b.booking_status!=='cancelled');
  const current=active.filter(b=>Number(String(b.event_date||'').slice(0,4))===currentYear).sort((a,b)=>a.event_date.localeCompare(b.event_date));
  const futureYears=[...new Set(active.map(b=>Number(String(b.event_date||'').slice(0,4))).filter(y=>y>currentYear))].sort((a,b)=>a-b);
  const pastYears=[...new Set(active.map(b=>Number(String(b.event_date||'').slice(0,4))).filter(y=>y<currentYear))].sort((a,b)=>b-a);
  let html='<section class="booking-current-year"><div class="booking-section-head"><h3>'+currentYear+' bookings</h3><span>'+current.length+'</span></div>'+(current.length?current.map(bookingListCard).join(''):'<p class="muted">No '+currentYear+' bookings yet.</p>')+'</section>';
- html+=futureYears.map(year=>bookingYearSection(year,active.filter(b=>Number(String(b.event_date||'').slice(0,4))===year),'future-year')).join('');
- html+=pastYears.map(year=>bookingYearSection(year,active.filter(b=>Number(String(b.event_date||'').slice(0,4))===year),'past-year')).join('');
+ html+=futureYears.map(year=>bookingYearSection(year,active.filter(b=>Number(String(b.event_date||'').slice(0,4))===year),'future-year',openYears.has(String(year)))).join('');
+ html+=pastYears.map(year=>bookingYearSection(year,active.filter(b=>Number(String(b.event_date||'').slice(0,4))===year),'past-year',openYears.has(String(year)))).join('');
  $('bookingList').innerHTML=active.length?html:'<p class="muted">No accepted bookings yet.</p>';
  document.querySelectorAll('[data-edit-booking]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();openBooking(x.dataset.editBooking)});
  document.querySelectorAll('[data-cancel-booking]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();openCancelBooking(x.dataset.cancelBooking)});
