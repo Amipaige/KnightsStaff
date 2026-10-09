@@ -3,7 +3,7 @@ const URL='https://jpjrsndbjklecvwiuvbf.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwanJzbmRiamtsZWN2d2l1dmJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY1MzQ1MTQsImV4cCI6MjEwMjExMDUxNH0.KrNOCgc71pyc7vNgWdy9juQCz5PiEl0oIQ52QFv-9FE';
 const db=window.supabase.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const $=id=>document.getElementById(id);
-let me=null,profile=null,bookings=[],enquiries=[],payments=[],tasks=[],checklistItems=[],staffingEvents=[],staffingSignups=[],supportTickets=[],staffInformation=[],staffProfiles=[],teamAccountEmails=new Set(),calendarCursor=new Date();
+let me=null,profile=null,bookings=[],enquiries=[],payments=[],tasks=[],checklistItems=[],staffingEvents=[],staffingSignups=[],supportTickets=[],staffInformation=[],staffProfiles=[],teamAccountEmails=new Set(),calendarCursor=new Date(),liveRefreshBusy=false;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>'£'+Number(n||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
 const dmy=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
@@ -60,6 +60,28 @@ async function refreshBackupStatus(){
  const when=new Date(stamp).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
  el.textContent='Last Google backup: '+when;
 }
+async function refreshLiveData(){
+ if(profile?.role!=='admin'||liveRefreshBusy||document.hidden)return;
+ liveRefreshBusy=true;
+ try{
+   const [b,e,p,t,c]=await Promise.all([
+     db.from('bookings').select('*').order('event_date',{ascending:true}),
+     db.from('booking_enquiries').select('*').order('created_at',{ascending:false}),
+     db.from('booking_payments').select('*').order('paid_at',{ascending:false}),
+     db.from('booking_tasks').select('*').order('due_date',{ascending:true}),
+     db.from('booking_checklist_items').select('*').order('sort_order',{ascending:true})
+   ]);
+   for(const x of [b,e,p,t,c])if(x.error)throw x.error;
+   bookings=b.data||[];enquiries=e.data||[];payments=p.data||[];tasks=t.data||[];checklistItems=c.data||[];
+   await refreshStaffingSummary();
+   renderDashboard();renderEnquiries();renderBookings();renderCalendar();
+   try{$('staffingFrame')?.contentWindow?.postMessage({type:'knights-refresh'},window.location.origin)}catch(_){}
+ }catch(e){
+   console.warn('KMB.Hub live refresh:',e);
+ }finally{
+   liveRefreshBusy=false;
+ }
+}
 async function refreshAdminData(){
  const [b,e,p,t,c,si,sp]=await Promise.all([
    db.from('bookings').select('*').order('event_date',{ascending:true}),
@@ -77,6 +99,7 @@ async function refreshAdminData(){
 }
 function totalPaid(bookingId){return payments.filter(p=>p.booking_id===bookingId).reduce((s,p)=>s+Number(p.amount||0),0)}
 function switchView(name){
+ if(profile?.role==='admin')refreshLiveData();
  document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
  const el=$(name+'View');if(el)el.classList.remove('hidden');
  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===name));
@@ -856,6 +879,9 @@ window.addEventListener('message',e=>{
    refreshStaffingSummary().then(renderDashboard).catch(err=>console.warn('Staffing summary refresh:',err));
  }
 });
+setInterval(()=>{if(profile?.role==='admin')refreshLiveData()},15000);
+window.addEventListener('focus',()=>{if(profile?.role==='admin')refreshLiveData()});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&profile?.role==='admin')refreshLiveData()});
 db.auth.onAuthStateChange((event,session)=>{if(event==='SIGNED_OUT')showAuth();if(session?.user&&['INITIAL_SESSION','SIGNED_IN','TOKEN_REFRESHED'].includes(event))setTimeout(()=>{if(!me||me.id!==session.user.id)bootUser(session.user).catch(e=>showAuth(e.message))},0)});
 (async()=>{try{const {data,error}=await db.auth.getSession();if(error)throw error;if(data.session?.user)await bootUser(data.session.user);else showAuth()}catch(e){if(stale(e))await clearLocal();showAuth('Please sign in again.')}})();
 })();
