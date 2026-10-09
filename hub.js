@@ -195,9 +195,21 @@ function renderEnquiries(){
  document.querySelectorAll('[data-accept]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();openAccept(b.dataset.accept)});
  document.querySelectorAll('[data-decline]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();declineEnquiry(b.dataset.decline)});
 }
+function bookingEventType(b){
+ const req=b?.requirements&&typeof b.requirements==='object'?b.requirements:{};
+ const keys=['Type of event','Event type','Event type / event name','Event Type','Event'];
+ for(const key of keys){
+   const value=String(req[key]??'').trim();
+   if(value)return value;
+ }
+ const legacy=String(b?.event_name||'').trim();
+ const customer=String(b?.customer_name||'').trim();
+ if(legacy&&legacy.toLowerCase()!==customer.toLowerCase())return legacy;
+ return 'Event';
+}
 function bookingListCard(b){
- const paid=totalPaid(b.id),out=Math.max(0,Number(b.total_amount||0)-paid),cancelled=b.booking_status==='cancelled',due=paymentDueDate(b);
- return '<div class="list-card clickable '+(cancelled?'cancelled-booking':'')+'" data-booking="'+b.id+'"><div class="row"><div><div class="event-name">'+esc(b.customer_name)+'</div><div class="meta">'+dmy(b.event_date)+' · '+esc(b.venue)+'<br>'+esc(b.event_name)+' · '+esc(b.guest_count||'—')+' guests · '+barLabel(b.bar_type)+'</div></div><span class="badge '+(cancelled?'overdue':'booked')+'">'+esc(b.booking_status.replaceAll('_',' ')).toUpperCase()+'</span></div><div class="booking-finance"><span>Paid <b>'+money(paid)+'</b></span><span>Outstanding <b class="'+(out>0?'balance-due':'balance-clear')+'">'+money(out)+'</b></span><span>Payment due <b>'+dmy(due)+'</b></span><span>Minimum spend <b>'+money(b.minimum_spend||0)+'</b></span><span>Staff <b>'+esc(b.staff_required)+'</b></span></div><div class="actions"><button class="btn primary" data-edit-booking="'+b.id+'">Edit booking & payments</button>'+(cancelled?'':'<button class="btn red" data-cancel-booking="'+b.id+'">Cancel booking</button>')+'</div></div>';
+ const paid=totalPaid(b.id),out=Math.max(0,Number(b.total_amount||0)-paid),cancelled=b.booking_status==='cancelled',due=paymentDueDate(b),eventType=bookingEventType(b);
+ return '<div class="list-card clickable '+(cancelled?'cancelled-booking':'')+'" data-booking="'+b.id+'"><div class="row"><div><div class="event-name">'+esc(b.customer_name||b.event_name||'Booking')+'</div><div class="meta">'+dmy(b.event_date)+' · '+esc(b.venue)+'<br>'+esc(eventType)+' · '+esc(b.guest_count||'—')+' guests · '+barLabel(b.bar_type)+'</div></div><span class="badge '+(cancelled?'overdue':'booked')+'">'+esc(b.booking_status.replaceAll('_',' ')).toUpperCase()+'</span></div><div class="booking-finance"><span>Paid <b>'+money(paid)+'</b></span><span>Outstanding <b class="'+(out>0?'balance-due':'balance-clear')+'">'+money(out)+'</b></span><span>Payment due <b>'+dmy(due)+'</b></span><span>Minimum spend <b>'+money(b.minimum_spend||0)+'</b></span><span>Staff <b>'+esc(b.staff_required)+'</b></span></div><div class="actions"><button class="btn primary" data-edit-booking="'+b.id+'">Edit booking & payments</button>'+(cancelled?'':'<button class="btn red" data-cancel-booking="'+b.id+'">Cancel booking</button>')+'</div></div>';
 }
 function bookingYearSection(year,list,labelClass=''){
  const ordered=[...list].sort((a,b)=>a.event_date.localeCompare(b.event_date));
