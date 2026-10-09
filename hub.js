@@ -830,6 +830,7 @@ window.addEventListener('message',e=>{
    if(!b)return alert('This staffing event is not linked to a booking.');
    switchView('bookings');openBooking(b.id,true);
  }
+ if(e.data.type==='knights-open-support'){switchView('support');return}
  if(e.data.type==='knights-staffing-changed'&&profile?.role==='admin'){
    refreshStaffingSummary().then(renderDashboard).catch(err=>console.warn('Staffing summary refresh:',err));
  }
