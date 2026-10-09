@@ -178,9 +178,18 @@ function openEnquiryDetail(id){
  $('detailDeclineBtn')&&($('detailDeclineBtn').onclick=()=>{closeModals();declineEnquiry(id)});
  openModal('enquiryDetailModal');
 }
+function enquiryListCard(e){
+ const declined=e.status==='declined';
+ return '<div class="list-card clickable" data-view-enquiry="'+e.id+'"><div class="row"><div><div class="event-name">'+esc(e.event_name||e.customer_name)+'</div><div class="meta">'+esc(e.customer_name)+' · '+dmy(e.event_date)+' · '+esc(e.venue||'Venue TBC')+'<br>'+esc(e.guest_count||'—')+' guests · '+barLabel(e.bar_type)+'</div><div class="source-tag">'+esc(e.source==='google_form'?'Google Form':'Manual')+'</div></div><span class="badge '+(declined?'overdue':'awaiting')+'">'+esc(e.status.replaceAll('_',' ')).toUpperCase()+'</span></div><div class="actions"><button class="btn primary" data-details="'+e.id+'">View requirements</button>'+(!declined?'<button class="btn green" data-accept="'+e.id+'">Record fee & accept</button><button class="btn red" data-decline="'+e.id+'">Decline</button>':'')+'</div></div>';
+}
 function renderEnquiries(){
- const visible=enquiries.filter(e=>e.status!=='accepted');
- $('enquiryList').innerHTML=visible.length?visible.map(e=>'<div class="list-card clickable" data-view-enquiry="'+e.id+'"><div class="row"><div><div class="event-name">'+esc(e.event_name||e.customer_name)+'</div><div class="meta">'+esc(e.customer_name)+' · '+dmy(e.event_date)+' · '+esc(e.venue||'Venue TBC')+'<br>'+esc(e.guest_count||'—')+' guests · '+barLabel(e.bar_type)+'</div><div class="source-tag">'+esc(e.source==='google_form'?'Google Form':'Manual')+'</div></div><span class="badge '+(e.status==='declined'?'overdue':'awaiting')+'">'+esc(e.status.replaceAll('_',' ')).toUpperCase()+'</span></div><div class="actions"><button class="btn primary" data-details="'+e.id+'">View requirements</button>'+(e.status!=='declined'?'<button class="btn green" data-accept="'+e.id+'">Record fee & accept</button><button class="btn red" data-decline="'+e.id+'">Decline</button>':'')+'</div></div>').join(''):'<p class="muted">No open enquiries.</p>';
+ const open=enquiries.filter(e=>e.status!=='accepted'&&e.status!=='declined');
+ const declined=enquiries.filter(e=>e.status==='declined');
+ let html=open.length?open.map(enquiryListCard).join(''):'<p class="muted">No open enquiries.</p>';
+ if(declined.length){
+   html+='<details class="booking-year-section cancelled-section declined-enquiries"><summary><span>Declined enquiries</span><b>'+declined.length+'</b></summary><div class="booking-year-body">'+declined.map(enquiryListCard).join('')+'</div></details>';
+ }
+ $('enquiryList').innerHTML=html;
  document.querySelectorAll('[data-details]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();openEnquiryDetail(b.dataset.details)});
  document.querySelectorAll('[data-view-enquiry]').forEach(card=>card.onclick=()=>openEnquiryDetail(card.dataset.viewEnquiry));
  document.querySelectorAll('[data-accept]').forEach(b=>b.onclick=ev=>{ev.stopPropagation();openAccept(b.dataset.accept)});
