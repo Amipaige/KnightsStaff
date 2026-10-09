@@ -24,6 +24,24 @@
       if(ins?.error)throw ins.error;
       profile=ins.data;
     }
+    if(profile?.role==='staff'&&profile.registration_status!=='inactive'){
+      try{
+        const {data:{session},error:sessionError}=await db.auth.getSession();
+        if(sessionError)throw sessionError;
+        if(session?.access_token){
+          const response=await fetch(URL+'/functions/v1/auto-link-staff-onboarding',{
+            method:'POST',
+            headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':KEY},
+            body:'{}'
+          });
+          const body=await response.json().catch(()=>({}));
+          if(response.ok&&body.approved){
+            const refreshed=await db.from('staff_profiles').select('*').eq('id',user.id).maybeSingle();
+            if(!refreshed.error&&refreshed.data)profile=refreshed.data;
+          }
+        }
+      }catch(e){console.warn('Automatic New Starter match:',e)}
+    }
     $('auth').classList.add('hidden');
     $('app').classList.remove('hidden');
     $('hello').textContent='Hello, '+(profile.full_name||user.email);
