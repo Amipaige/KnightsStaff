@@ -805,10 +805,10 @@ async function declineEnquiry(id){if(!confirm('Decline this enquiry?'))return;co
 async function acceptBooking(){
  const id=$('acceptEnquiryId').value,e=enquiries.find(x=>x.id===id);if(!e)return;
  const fee=Number($('acceptFee').value||0);
- const eventName=$('acceptEvent').value.trim(),eventDate=$('acceptDate').value,venue=$('acceptVenue').value.trim();
+ const eventType=$('acceptEvent').value.trim(),eventName=e.customer_name||eventType,eventDate=$('acceptDate').value,venue=$('acceptVenue').value.trim();
  const guests=$('acceptGuests').value?Number($('acceptGuests').value):null,bar=$('acceptBar').value;
  if(fee<=0)return $('acceptMsg').textContent='Record the booking fee paid before accepting.';
- if(!eventName||!eventDate||!venue)return $('acceptMsg').textContent='Event name, date and venue are required.';
+ if(!eventName||!eventDate||!venue)return $('acceptMsg').textContent='Host name, date and venue are required.';
  const capacityIssue=bookingCapacityIssue(eventDate,bar);if(capacityIssue)return $('acceptMsg').textContent=capacityIssue;
  $('confirmAcceptBtn').disabled=true;$('acceptMsg').textContent='Creating booking and staffing event…';
  let eventId=null,bookingId=null;
@@ -816,7 +816,8 @@ async function acceptBooking(){
    const staffRequired=Number($('acceptStaff').value||1),arrival=$('acceptArrival').value||null,start=$('acceptStart').value||null,finish=$('acceptFinish').value||null;
    const ev=await db.from('bar_events').insert({event_name:eventName,event_date:eventDate,venue,arrival_time:arrival,start_time:start,finish_time:finish,staff_required:staffRequired,bar_package:barLabel(bar),guest_count:guests,notes:e.notes}).select('id').single();
    if(ev.error)throw ev.error;eventId=ev.data.id;
-   const br=await db.from('bookings').insert({enquiry_id:e.id,customer_name:e.customer_name,customer_email:e.customer_email,customer_phone:e.customer_phone,event_name:eventName,event_date:eventDate,venue,guest_count:guests,bar_type:bar,staff_required:staffRequired,arrival_time:arrival,start_time:start,finish_time:finish,total_amount:Number($('acceptTotal').value||0),minimum_spend:Number($('acceptMinimumSpend').value||0),booking_fee_due:fee,booking_status:'booked',tens_required:$('acceptTens').checked,staffing_event_id:eventId,notes:e.notes,requirements:rawResponses(e)}).select('id').single();
+   const req={...rawResponses(e)};if(eventType&&!req['Type of event'])req['Type of event']=eventType;
+   const br=await db.from('bookings').insert({enquiry_id:e.id,customer_name:e.customer_name,customer_email:e.customer_email,customer_phone:e.customer_phone,event_name:eventName,event_date:eventDate,venue,guest_count:guests,bar_type:bar,staff_required:staffRequired,arrival_time:arrival,start_time:start,finish_time:finish,total_amount:Number($('acceptTotal').value||0),minimum_spend:Number($('acceptMinimumSpend').value||0),booking_fee_due:fee,booking_status:'booked',tens_required:$('acceptTens').checked,staffing_event_id:eventId,notes:e.notes,requirements:req}).select('id').single();
    if(br.error)throw br.error;bookingId=br.data.id;
    const pay=await db.from('booking_payments').insert({booking_id:bookingId,amount:fee,payment_type:'booking_fee',method:$('acceptMethod').value||null,reference:$('acceptReference').value.trim()||null});
    if(pay.error)throw pay.error;
