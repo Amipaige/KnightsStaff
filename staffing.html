@@ -42,6 +42,10 @@
         }
       }catch(e){console.warn('Automatic New Starter match:',e)}
     }
+    if(profile.role==='admin'&&window.self===window.top){
+      window.location.replace('hub.html');
+      return;
+    }
     $('auth').classList.add('hidden');
     $('app').classList.remove('hidden');
     $('hello').textContent='Hello, '+(profile.full_name||user.email);
