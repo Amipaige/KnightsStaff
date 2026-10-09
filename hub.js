@@ -132,12 +132,16 @@ function renderDashboard(){
  });
  const paymentActions=bookings.filter(b=>b.booking_status!=='cancelled'&&paymentOutstanding(b)>0&&paymentDueDate(b)&&paymentDueDate(b)<=today);
  const outstandingEnquiries=enquiries.filter(e=>e.status!=='accepted'&&e.status!=='declined');
+ const staleEnquiryActions=outstandingEnquiries.filter(e=>{
+   if(!e.created_at)return false;
+   return (Date.now()-new Date(e.created_at).getTime())>=10*86400000;
+ });
  const activeStaffingIds=new Set(staffingEvents.map(e=>e.id));
  const staffingRequests=staffingSignups.filter(s=>s.status==='pending'&&activeStaffingIds.has(s.event_id)).length;
  const eventsNeedStaff=staffingEvents.filter(e=>staffingFilledCount(e)<Number(e.staff_required||0)).length;
  $('statUpcoming').textContent=allUpcoming.length;
  $('statOutstanding').textContent=money(outstanding);
- $('statTasks').textContent=allOpenTasks.length+paymentActions.length;
+ $('statTasks').textContent=allOpenTasks.length+paymentActions.length+staleEnquiryActions.length;
  $('statPending').textContent=outstandingEnquiries.length;
  $('statStaffRequests').textContent=staffingRequests;
  $('statNeedStaff').textContent=eventsNeedStaff;
@@ -146,13 +150,18 @@ function renderDashboard(){
    const due=paymentDueDate(b),overdue=due<today;
    return '<div class="list-card task-card clickable" data-payment-action-booking="'+b.id+'"><div class="task-copy"><b>Outstanding payment due · '+money(paymentOutstanding(b))+'</b><div class="meta"><strong>'+esc(b.customer_name||'Unknown host')+'</strong>'+(b.event_name?' · '+esc(b.event_name):'')+' · due '+dmy(due)+'</div></div><span class="badge '+(overdue?'overdue':'awaiting')+'">'+(overdue?'OVERDUE':'DUE TODAY')+'</span></div>'
  }).join('');
+ const enquiryActionHtml=staleEnquiryActions.map(e=>{
+   const age=Math.max(10,Math.floor((Date.now()-new Date(e.created_at).getTime())/86400000));
+   return '<div class="list-card task-card clickable" data-enquiry-followup="'+e.id+'"><div class="task-copy"><b>Follow up enquiry</b><div class="meta"><strong>'+esc(e.customer_name||'Unknown customer')+'</strong>'+(e.event_name?' · '+esc(e.event_name):'')+' · '+age+' days old</div></div><span class="badge overdue">FOLLOW UP</span></div>'
+ }).join('');
  const normalTaskHtml=openTasks.map(t=>{
    const b=bookings.find(x=>x.id===t.booking_id);const overdue=t.due_date<today;
    return '<div class="list-card task-card"><label class="task-check"><input type="checkbox" data-complete-task="'+t.id+'"><span></span></label><div class="task-copy"><b>'+esc(t.title)+'</b><div class="meta"><strong>'+esc(b?.customer_name||'Unknown host')+'</strong>'+(b?.event_name?' · '+esc(b.event_name):'')+' · due '+dmy(t.due_date)+'</div></div><span class="badge '+(overdue?'overdue':'awaiting')+'">'+(overdue?'OVERDUE':'OPEN')+'</span></div>'
  }).join('');
- $('dashboardTasks').innerHTML=(paymentActionHtml+normalTaskHtml)||'<p class="muted">Nothing outstanding.</p>';
+ $('dashboardTasks').innerHTML=(enquiryActionHtml+paymentActionHtml+normalTaskHtml)||'<p class="muted">Nothing outstanding.</p>';
  document.querySelectorAll('[data-complete-task]').forEach(x=>x.onchange=()=>setTaskCompleted(x.dataset.completeTask,true,x));
  document.querySelectorAll('[data-payment-action-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.paymentActionBooking,false));
+ document.querySelectorAll('[data-enquiry-followup]').forEach(x=>x.onclick=()=>openEnquiryDetail(x.dataset.enquiryFollowup));
  document.querySelectorAll('[data-dashboard-booking]').forEach(x=>x.onclick=()=>openBooking(x.dataset.dashboardBooking,true));
 }
 async function setTaskCompleted(id,isCompleted,input){
