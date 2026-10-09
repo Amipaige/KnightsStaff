@@ -510,6 +510,9 @@ function openBooking(id,showRequirements=false,focusTaskId=null){
  $('bookingEditMsg').textContent='';$('paymentMsg').textContent='';
  $('cancelBookingBtn').classList.toggle('hidden',b.booking_status==='cancelled');
  refreshBookingBalance(b);renderPaymentHistory(id);renderEventChecklist(id);
+ $('bookingImageInput').value='';$('bookingImageMsg').textContent='';
+ $('bookingImageGallery').innerHTML='<p class="booking-image-empty">Loading images…</p>';
+ loadBookingImages(id).catch(e=>{$('bookingImageGallery').innerHTML='<p class="booking-image-empty">Could not load images.</p>';$('bookingImageMsg').textContent=e.message||'Could not load images.'});
  $('bookingRequirements').innerHTML=requirementRows(b.requirements);
  $('bookingRequirementsWrap').open=!!showRequirements;
  openModal('bookingModal');
@@ -643,6 +646,70 @@ async function setSupportStatus(id,status){
  await loadSupportTickets();
 }
 
+function safeBookingImageName(name){
+ return String(name||'image').replace(/[^a-zA-Z0-9._-]+/g,'-').replace(/-+/g,'-').slice(-100)||'image';
+}
+function bookingImageSize(bytes){
+ const n=Number(bytes||0);if(!n)return '';
+ if(n<1024)return n+' B';if(n<1024*1024)return Math.round(n/1024)+' KB';
+ return (n/(1024*1024)).toFixed(1)+' MB';
+}
+async function loadBookingImages(bookingId){
+ if(!bookingId)return;
+ const r=await db.from('booking_images').select('*').eq('booking_id',bookingId).order('created_at',{ascending:false});
+ if(r.error)throw r.error;
+ const rows=r.data||[];
+ if($('editBookingId').value!==bookingId)return;
+ if(!rows.length){$('bookingImageGallery').innerHTML='<p class="booking-image-empty">No images uploaded for this event yet.</p>';return}
+ const cards=[];
+ for(const item of rows){
+   const signed=await db.storage.from('booking-images').createSignedUrl(item.storage_path,3600);
+   if(signed.error)continue;
+   cards.push('<div class="booking-image-card"><a href="'+esc(signed.data.signedUrl)+'" target="_blank" rel="noopener"><img src="'+esc(signed.data.signedUrl)+'" alt="'+esc(item.file_name||'Booking image')+'" loading="lazy"></a><div class="booking-image-meta"><span class="booking-image-name" title="'+esc(item.file_name||'')+'">'+esc(item.file_name||'Image')+(item.file_size?' · '+esc(bookingImageSize(item.file_size)):'')+'</span><button class="booking-image-delete" type="button" data-delete-booking-image="'+item.id+'" data-storage-path="'+esc(item.storage_path)+'" aria-label="Delete image" title="Delete image">×</button></div></div>');
+ }
+ $('bookingImageGallery').innerHTML=cards.length?cards.join(''):'<p class="booking-image-empty">No images could be displayed.</p>';
+ document.querySelectorAll('[data-delete-booking-image]').forEach(btn=>btn.onclick=()=>deleteBookingImage(btn.dataset.deleteBookingImage,btn.dataset.storagePath));
+}
+async function uploadBookingImages(){
+ const bookingId=$('editBookingId').value;
+ const files=[...($('bookingImageInput').files||[])];
+ if(!bookingId)return;
+ if(!files.length)return $('bookingImageMsg').textContent='Choose at least one image first.';
+ const allowed=new Set(['image/jpeg','image/png','image/webp','image/heic','image/heif']);
+ for(const file of files){
+   if(!allowed.has(String(file.type||'').toLowerCase()))return $('bookingImageMsg').textContent='Please choose JPG, PNG, WEBP, HEIC or HEIF images only.';
+   if(file.size>10*1024*1024)return $('bookingImageMsg').textContent=file.name+' is larger than 10 MB.';
+ }
+ $('uploadBookingImagesBtn').disabled=true;$('bookingImageMsg').textContent='Uploading '+files.length+' image'+(files.length===1?'':'s')+'…';
+ let uploaded=0;
+ try{
+   for(const file of files){
+     const path=bookingId+'/'+Date.now()+'-'+crypto.randomUUID()+'-'+safeBookingImageName(file.name);
+     const up=await db.storage.from('booking-images').upload(path,file,{cacheControl:'3600',upsert:false,contentType:file.type});
+     if(up.error)throw up.error;
+     const meta=await db.from('booking_images').insert({booking_id:bookingId,storage_path:path,file_name:file.name,mime_type:file.type||null,file_size:file.size,uploaded_by:me?.id||null});
+     if(meta.error){await db.storage.from('booking-images').remove([path]);throw meta.error}
+     uploaded++;
+   }
+   $('bookingImageInput').value='';
+   $('bookingImageMsg').textContent=uploaded+' image'+(uploaded===1?'':'s')+' uploaded.';
+   await loadBookingImages(bookingId);
+ }catch(e){$('bookingImageMsg').textContent=e.message||'Could not upload image.'}
+ finally{$('uploadBookingImagesBtn').disabled=false}
+}
+async function deleteBookingImage(id,path){
+ const bookingId=$('editBookingId').value;
+ if(!confirm('Delete this image from the booking?'))return;
+ $('bookingImageMsg').textContent='Deleting image…';
+ try{
+   const storageResult=await db.storage.from('booking-images').remove([path]);
+   if(storageResult.error)throw storageResult.error;
+   const r=await db.from('booking_images').delete().eq('id',id);if(r.error)throw r.error;
+   $('bookingImageMsg').textContent='Image deleted.';
+   await loadBookingImages(bookingId);
+ }catch(e){$('bookingImageMsg').textContent=e.message||'Could not delete image.'}
+}
+
 async function addPayment(){
  const id=$('editBookingId').value,b=bookings.find(x=>x.id===id);if(!b)return;
  const amount=Number($('paymentAmount').value||0);if(amount<=0)return $('paymentMsg').textContent='Enter the payment amount received.';
@@ -745,7 +812,7 @@ document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>switchView(b.data
 document.querySelectorAll('[data-jump]').forEach(b=>{b.onclick=()=>switchView(b.dataset.jump);b.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();switchView(b.dataset.jump)}}});
 $('mobileMenuBtn').onclick=()=>document.querySelector('.sidebar').classList.toggle('open');
 $('newEnquiryBtn').onclick=()=>{['eqCustomer','eqEmail','eqPhone','eqEvent','eqDate','eqVenue','eqGuests','eqNotes'].forEach(id=>$(id).value='');$('enquiryMsg').textContent='';openModal('enquiryModal')};
-$('saveEnquiryBtn').onclick=saveEnquiry;$('confirmAcceptBtn').onclick=acceptBooking;$('saveBookingBtn').onclick=saveBooking;$('addPaymentBtn').onclick=addPayment;$('cancelBookingBtn').onclick=()=>openCancelBooking($('editBookingId').value);$('confirmCancelBookingBtn').onclick=confirmCancelBooking;$('keepBookingBtn').onclick=()=>$('cancelBookingModal').classList.add('hidden');
+$('saveEnquiryBtn').onclick=saveEnquiry;$('confirmAcceptBtn').onclick=acceptBooking;$('saveBookingBtn').onclick=saveBooking;$('addPaymentBtn').onclick=addPayment;$('uploadBookingImagesBtn').onclick=uploadBookingImages;$('cancelBookingBtn').onclick=()=>openCancelBooking($('editBookingId').value);$('confirmCancelBookingBtn').onclick=confirmCancelBooking;$('keepBookingBtn').onclick=()=>$('cancelBookingModal').classList.add('hidden');
 document.querySelectorAll('[data-close-modal]').forEach(b=>b.onclick=closeModals);
 document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModals()}));
 $('teamSearch')?.addEventListener('input',renderTeam);
