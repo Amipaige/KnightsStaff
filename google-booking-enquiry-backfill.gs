@@ -43,6 +43,27 @@ function importEventsRows105And106() {
   );
 }
 
+function importBookingRequirementsRow107() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  if (!sheet) throw new Error('Could not find the active Booking Requirements sheet.');
+
+  const secret = PropertiesService.getScriptProperties()
+    .getProperty('KNIGHTS_WEBHOOK_SECRET');
+  if (!secret) {
+    throw new Error(
+      'Missing Script Property KNIGHTS_WEBHOOK_SECRET. Add the existing booking webhook secret in Apps Script > Project Settings > Script Properties.'
+    );
+  }
+
+  const result = importEventsRow_(sheet, 107, secret);
+  Logger.log(JSON.stringify(result, null, 2));
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    result.skipped ? 'Row 107 was already imported.' : 'Row 107 sent to KMB.Hub Enquiries.',
+    'KMB.Hub',
+    6
+  );
+}
+
 function importEventsRow_(sheet, rowNumber, secret) {
   const props = PropertiesService.getDocumentProperties();
   const markerKey = 'KMB_BOOKING_BACKFILL_EVENTS_ROW_' + rowNumber;
