@@ -148,7 +148,7 @@ function renderDashboard(){
  $('dashboardEvents').innerHTML=currentMonthUpcoming.map(bookingCardMini).join('')||'<p class="muted">No more bookings this month.</p>';
  const paymentActionHtml=paymentActions.map(b=>{
    const due=paymentDueDate(b),overdue=due<today;
-   return '<div class="list-card task-card clickable" data-payment-action-booking="'+b.id+'"><div class="task-copy"><b>Outstanding payment due · '+money(paymentOutstanding(b))+'</b><div class="meta"><strong>'+esc(b.customer_name||'Unknown host')+'</strong>'+(b.event_name?' · '+esc(b.event_name):'')+' · due '+dmy(due)+'</div></div><span class="badge '+(overdue?'overdue':'awaiting')+'">'+(overdue?'OVERDUE':'DUE TODAY')+'</span></div>'
+   return '<div class="list-card task-card clickable" data-payment-action-booking="'+b.id+'"><div class="task-copy"><b>Outstanding payment due · '+money(paymentOutstanding(b))+'</b><div class="meta"><strong>'+esc(b.customer_name||'Unknown host')+'</strong>'+' · '+esc(bookingEventType(b))+' · due '+dmy(due)+'</div></div><span class="badge '+(overdue?'overdue':'awaiting')+'">'+(overdue?'OVERDUE':'DUE TODAY')+'</span></div>'
  }).join('');
  const enquiryActionHtml=staleEnquiryActions.map(e=>{
    const age=Math.max(10,Math.floor((Date.now()-new Date(e.created_at).getTime())/86400000));
@@ -156,7 +156,7 @@ function renderDashboard(){
  }).join('');
  const normalTaskHtml=openTasks.map(t=>{
    const b=bookings.find(x=>x.id===t.booking_id);const overdue=t.due_date<today;
-   return '<div class="list-card task-card"><label class="task-check"><input type="checkbox" data-complete-task="'+t.id+'"><span></span></label><div class="task-copy"><b>'+esc(t.title)+'</b><div class="meta"><strong>'+esc(b?.customer_name||'Unknown host')+'</strong>'+(b?.event_name?' · '+esc(b.event_name):'')+' · due '+dmy(t.due_date)+'</div></div><span class="badge '+(overdue?'overdue':'awaiting')+'">'+(overdue?'OVERDUE':'OPEN')+'</span></div>'
+   return '<div class="list-card task-card"><label class="task-check"><input type="checkbox" data-complete-task="'+t.id+'"><span></span></label><div class="task-copy"><b>'+esc(t.title)+'</b><div class="meta"><strong>'+esc(b?.customer_name||'Unknown host')+'</strong>'+(b?' · '+esc(bookingEventType(b)):'')+' · due '+dmy(t.due_date)+'</div></div><span class="badge '+(overdue?'overdue':'awaiting')+'">'+(overdue?'OVERDUE':'OPEN')+'</span></div>'
  }).join('');
  $('dashboardTasks').innerHTML=(enquiryActionHtml+paymentActionHtml+normalTaskHtml)||'<p class="muted">Nothing outstanding.</p>';
  document.querySelectorAll('[data-complete-task]').forEach(x=>x.onchange=()=>setTaskCompleted(x.dataset.completeTask,true,x));
