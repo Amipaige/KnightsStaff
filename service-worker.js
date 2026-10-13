@@ -1,4 +1,4 @@
-const CACHE_NAME='kmb-hub-v1';
+const CACHE_NAME='kmb-hub-v2';
 const APP_SHELL=[
   './',
   './hub.html',
