@@ -172,7 +172,7 @@ async function setTaskCompleted(id,isCompleted,input){
  const bookingId=tasks.find(t=>t.id===id)?.booking_id;
  if(bookingId&&$('editBookingId')?.value===bookingId)renderEventChecklist(bookingId);
 }
-function bookingCardMini(b){return '<div class="list-card clickable" data-dashboard-booking="'+b.id+'"><div class="row"><div><div class="event-name">'+esc(b.customer_name)+'</div><div class="meta">'+dmy(b.event_date)+' · '+esc(b.venue)+(b.event_name?' · '+esc(b.event_name):'')+'</div></div><span class="bar-chip '+barClass(b.bar_type)+'">'+barLabel(b.bar_type)+'</span></div></div>'}
+function bookingCardMini(b){return '<div class="list-card clickable" data-dashboard-booking="'+b.id+'"><div class="row"><div><div class="event-name">'+esc(b.customer_name)+'</div><div class="meta">'+dmy(b.event_date)+' · '+esc(b.venue)+' · '+esc(bookingEventType(b))+'</div></div><span class="bar-chip '+barClass(b.bar_type)+'">'+barLabel(b.bar_type)+'</span></div></div>'}
 function rawResponses(e){return e?.raw_payload?.responses&&typeof e.raw_payload.responses==='object'?e.raw_payload.responses:{}}
 function responseExact(e,...names){
  const wanted=names.map(x=>String(x).toLowerCase().replace(/\s+/g,' ').trim());
@@ -288,7 +288,8 @@ function renderCalendar(){
    const availabilityLabel=dayBookings.length?dayBookings.length+' of 3 confirmed bookings used':'';
    const now=new Date(),todayIso=[now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');
    const isToday=iso===todayIso;
-   const bookingHtml=dayBookings.map(b=>'<button class="cal-event '+barClass(b.bar_type)+'" data-calendar-booking="'+b.id+'" title="'+esc(b.customer_name)+' — '+esc(b.event_name)+'">'+esc(b.customer_name)+'</button>').join('');
+   const bookingHtml=dayBookings.map(b=>'<button class="cal-event '+barClass(b.bar_type)+'" data-calendar-booking="'+b.id+'" title="'+esc(b.customer_name)+' — '+esc(bookingEventType(b))+'"'
+>'+esc(b.customer_name)+'</button>').join('');
    const enquiryHtml=dayEnquiries.map(e=>'<button class="cal-event enquiry" data-calendar-enquiry="'+e.id+'" title="Open enquiry — '+esc(e.customer_name)+' — '+esc(e.event_name||'Event')+'">? '+esc(e.customer_name||e.event_name||'Enquiry')+'</button>').join('');
    html+='<div class="calendar-day '+(d.getMonth()!==m?'outside ':'')+(isToday?'today-cell':'')+'"><div class="calendar-day-head"><div class="day-num '+availabilityClass+' '+(isToday?'today':'')+'" '+(availabilityLabel?'title="'+availabilityLabel+'" aria-label="'+availabilityLabel+(isToday?' · Today':'')+'"':(isToday?'title="Today" aria-label="Today"':''))+'>'+d.getDate()+'</div><div class="calendar-task-icons">'+taskIcons+'</div></div>'+bookingHtml+enquiryHtml+'</div>';
  }
@@ -556,7 +557,7 @@ function openBooking(id,showRequirements=false,focusTaskId=null){
  const b=bookings.find(x=>x.id===id);if(!b)return;
  $('editBookingId').value=id;$('bookingModalTitle').textContent=b.customer_name||b.event_name;
  $('editCustomer').value=b.customer_name||'';$('editEmail').value=b.customer_email||'';$('editPhone').value=b.customer_phone||'';
- $('editEvent').value=b.event_name||'';$('editDate').value=b.event_date||'';$('editVenue').value=b.venue||'';$('editGuests').value=b.guest_count||'';
+ $('editEvent').value=bookingEventType(b)||'';$('editDate').value=b.event_date||'';$('editVenue').value=b.venue||'';$('editGuests').value=b.guest_count||'';
  $('editBar').value=b.bar_type;$('editTotal').value=Number(b.total_amount||0);$('editMinimumSpend').value=Number(b.minimum_spend||0);$('editStaff').value=b.staff_required||1;
  $('editArrival').value=String(b.arrival_time||'').slice(0,5);$('editStart').value=String(b.start_time||'').slice(0,5);$('editFinish').value=String(b.finish_time||'').slice(0,5);
  $('editTens').checked=!!b.tens_required;$('editNotes').value=b.notes||'';
@@ -589,7 +590,7 @@ function openBooking(id,showRequirements=false,focusTaskId=null){
 function openCancelBooking(id){
  const b=bookings.find(x=>x.id===id);if(!b||b.booking_status==='cancelled')return;
  $('cancelBookingId').value=id;
- $('cancelBookingText').innerHTML='Cancel <b>'+esc(b.customer_name)+'</b> — '+esc(b.event_name)+' on '+dmy(b.event_date)+'?';
+ $('cancelBookingText').innerHTML='Cancel <b>'+esc(b.customer_name)+'</b> — '+esc(bookingEventType(b))+' on '+dmy(b.event_date)+'?';
  $('cancelBookingMsg').textContent='';
  openModal('cancelBookingModal');
 }
@@ -614,21 +615,24 @@ async function confirmCancelBooking(){
 }
 async function saveBooking(){
  const id=$('editBookingId').value,b=bookings.find(x=>x.id===id);if(!b)return;
+ const customerName=$('editCustomer').value.trim(),eventType=$('editEvent').value.trim();
+ const requirements={...(b.requirements&&typeof b.requirements==='object'?b.requirements:{})};
+ if(eventType)requirements['Type of event']=eventType;
  const payload={
-   customer_name:$('editCustomer').value.trim(),customer_email:$('editEmail').value.trim()||null,customer_phone:$('editPhone').value.trim()||null,
-   event_name:$('editEvent').value.trim(),event_date:$('editDate').value,venue:$('editVenue').value.trim(),
+   customer_name:customerName,customer_email:$('editEmail').value.trim()||null,customer_phone:$('editPhone').value.trim()||null,
+   event_name:customerName,event_date:$('editDate').value,venue:$('editVenue').value.trim(),
    guest_count:$('editGuests').value?Number($('editGuests').value):null,bar_type:$('editBar').value,total_amount:Number($('editTotal').value||0),minimum_spend:Number($('editMinimumSpend').value||0),
    staff_required:Number($('editStaff').value||1),arrival_time:$('editArrival').value||null,start_time:$('editStart').value||null,finish_time:$('editFinish').value||null,
-   tens_required:$('editTens').checked,notes:$('editNotes').value.trim()||null,updated_at:new Date().toISOString()
+   tens_required:$('editTens').checked,notes:$('editNotes').value.trim()||null,requirements,updated_at:new Date().toISOString()
  };
- if(!payload.customer_name||!payload.event_name||!payload.event_date||!payload.venue)return $('bookingEditMsg').textContent='Host, event name, date and venue are required.';
+ if(!payload.customer_name||!eventType||!payload.event_date||!payload.venue)return $('bookingEditMsg').textContent='Host, event type, date and venue are required.';
  const capacityIssue=bookingCapacityIssue(payload.event_date,payload.bar_type,id);if(capacityIssue)return $('bookingEditMsg').textContent=capacityIssue;
  $('saveBookingBtn').disabled=true;$('bookingEditMsg').textContent='Saving…';
  try{
    const r=await db.from('bookings').update(payload).eq('id',id);if(r.error)throw r.error;
    await ensureChecklistForBooking(id);
    if(b.staffing_event_id){
-     const er=await db.from('bar_events').update({event_name:payload.event_name,event_date:payload.event_date,venue:payload.venue,guest_count:payload.guest_count,bar_package:barLabel(payload.bar_type),staff_required:payload.staff_required,arrival_time:payload.arrival_time,start_time:payload.start_time,finish_time:payload.finish_time,notes:payload.notes}).eq('id',b.staffing_event_id);
+     const er=await db.from('bar_events').update({event_name:payload.customer_name,event_date:payload.event_date,venue:payload.venue,guest_count:payload.guest_count,bar_package:barLabel(payload.bar_type),staff_required:payload.staff_required,arrival_time:payload.arrival_time,start_time:payload.start_time,finish_time:payload.finish_time,notes:payload.notes}).eq('id',b.staffing_event_id);
      if(er.error)throw er.error;
    }
    if(payload.event_date!==b.event_date){
