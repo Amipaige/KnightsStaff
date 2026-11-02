@@ -249,14 +249,19 @@ function bookingYearSection(year,list,labelClass='',isOpen=false){
 }
 function renderBookings(){
  const openYears=new Set([...document.querySelectorAll('#bookingList details.booking-year-section[open][data-booking-year]')].map(x=>String(x.dataset.bookingYear)));
+ const pastOpen=!!document.querySelector('#bookingList details.past-bookings-section[open]');
  const now=new Date(),currentYear=now.getFullYear();
+ const today=[now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');
  const active=bookings.filter(b=>b.booking_status!=='cancelled');
- const current=active.filter(b=>Number(String(b.event_date||'').slice(0,4))===currentYear).sort((a,b)=>a.event_date.localeCompare(b.event_date));
- const futureYears=[...new Set(active.map(b=>Number(String(b.event_date||'').slice(0,4))).filter(y=>y>currentYear))].sort((a,b)=>a-b);
- const pastYears=[...new Set(active.map(b=>Number(String(b.event_date||'').slice(0,4))).filter(y=>y<currentYear))].sort((a,b)=>b-a);
- let html='<section class="booking-current-year"><div class="booking-section-head"><h3>'+currentYear+' bookings</h3><span>'+current.length+'</span></div>'+(current.length?current.map(bookingListCard).join(''):'<p class="muted">No '+currentYear+' bookings yet.</p>')+'</section>';
- html+=futureYears.map(year=>bookingYearSection(year,active.filter(b=>Number(String(b.event_date||'').slice(0,4))===year),'future-year',openYears.has(String(year)))).join('');
- html+=pastYears.map(year=>bookingYearSection(year,active.filter(b=>Number(String(b.event_date||'').slice(0,4))===year),'past-year',openYears.has(String(year)))).join('');
+ const upcoming=active.filter(b=>String(b.event_date||'')>=today);
+ const past=active.filter(b=>String(b.event_date||'')<today).sort((a,b)=>String(b.event_date||'').localeCompare(String(a.event_date||'')));
+ const current=upcoming.filter(b=>Number(String(b.event_date||'').slice(0,4))===currentYear).sort((a,b)=>a.event_date.localeCompare(b.event_date));
+ const futureYears=[...new Set(upcoming.map(b=>Number(String(b.event_date||'').slice(0,4))).filter(y=>y>currentYear))].sort((a,b)=>a-b);
+ let html='<section class="booking-current-year"><div class="booking-section-head"><h3>'+currentYear+' bookings</h3><span>'+current.length+'</span></div>'+(current.length?current.map(bookingListCard).join(''):'<p class="muted">No upcoming '+currentYear+' bookings.</p>')+'</section>';
+ html+=futureYears.map(year=>bookingYearSection(year,upcoming.filter(b=>Number(String(b.event_date||'').slice(0,4))===year),'future-year',openYears.has(String(year)))).join('');
+ if(past.length){
+   html+='<details class="booking-year-section past-bookings-section"'+(pastOpen?' open':'')+'><summary><span>Past bookings</span><b>'+past.length+'</b></summary><div class="booking-year-body">'+past.map(bookingListCard).join('')+'</div></details>';
+ }
  $('bookingList').innerHTML=active.length?html:'<p class="muted">No accepted bookings yet.</p>';
  document.querySelectorAll('[data-edit-booking]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();openBooking(x.dataset.editBooking)});
  document.querySelectorAll('[data-cancel-booking]').forEach(x=>x.onclick=ev=>{ev.stopPropagation();openCancelBooking(x.dataset.cancelBooking)});
