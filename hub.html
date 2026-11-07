@@ -360,6 +360,13 @@
         <div><label>Minimum spend</label><input id="editMinimumSpend" type="number" step="0.01" min="0" placeholder="e.g. 500"></div>
       </div>
 
+      <h3>Minimum spend result</h3>
+      <div class="form-grid">
+        <div><label>Actual bar sales</label><input id="editActualSales" type="number" step="0.01" min="0" placeholder="Enter after the event"></div>
+        <div id="minimumSpendStatus" class="summary-box"><span>Status</span><b>Enter actual bar sales after the event.</b></div>
+      </div>
+      <p class="small muted">If the minimum spend is not met, the Hub will automatically create a shortfall action due 7 days after the event. Record any shortfall payment below using the “Minimum spend shortfall” payment type.</p>
+
       <h3>Staffing & timings</h3>
       <div class="form-grid">
         <div><label>Staff required</label><input id="editStaff" type="number" min="1"></div>
@@ -388,7 +395,7 @@
       <div id="paymentHistory" class="payment-history"></div>
       <div class="payment-entry">
         <div><label>Amount received</label><input id="paymentAmount" type="number" step="0.01" min="0.01"></div>
-        <div><label>Type</label><select id="paymentType"><option value="balance">Balance / service payment</option><option value="booking_fee">Booking fee</option><option value="other">Other</option></select></div>
+        <div><label>Type</label><select id="paymentType"><option value="balance">Balance / service payment</option><option value="booking_fee">Booking fee</option><option value="minimum_spend_shortfall">Minimum spend shortfall</option><option value="other">Other</option></select></div>
         <div><label>Method</label><select id="paymentMethod"><option>Bank transfer</option><option>Card</option><option>Cash</option><option>Other</option></select></div>
         <div><label>Reference</label><input id="paymentReference" placeholder="Optional"></div>
       </div>
@@ -420,6 +427,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
-  <script src="hub.js?v=20261102-1"></script>
+  <script src="hub.js?v=20261107-2"></script>
 </body>
 </html>
