@@ -79,3 +79,30 @@
 .booking-image-delete{border:0;background:transparent;font-size:18px;line-height:1;cursor:pointer;color:#9b352f;padding:2px 4px}
 .booking-image-empty{grid-column:1/-1;padding:14px;border:1px dashed var(--line,#ddd4c7);border-radius:10px;color:#777166}
 @media(max-width:600px){.booking-image-gallery{grid-template-columns:repeat(2,minmax(0,1fr))}.booking-image-upload{align-items:stretch}.booking-image-upload input[type=file],.booking-image-upload .btn{width:100%}}
+
+
+/* 2027 internal pricing quick reference */
+.pricing-quick-ref{margin:16px 0 18px;border:1px solid #d9c9e7;border-radius:14px;background:linear-gradient(180deg,#fbf8ff 0%,#f6f0fb 100%);overflow:hidden}
+.pricing-quick-ref summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none;padding:14px 16px;font-weight:800;color:#4d2f64}
+.pricing-quick-ref summary::-webkit-details-marker{display:none}
+.pricing-quick-ref summary:after{content:"⌄";font-family:Arial,sans-serif;font-size:16px;color:#6c4a83;margin-left:auto}
+.pricing-quick-ref[open] summary:after{content:"⌃"}
+.pricing-internal-badge{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;background:#6f4a8e;color:#fff;font-size:10px;line-height:1;font-weight:800;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+.pricing-quick-body{border-top:1px solid #e4d8ee;padding:14px 16px 16px}
+.pricing-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.pricing-table{width:100%;border-collapse:collapse;min-width:560px;background:#fff;border:1px solid #e8deef;border-radius:10px;overflow:hidden}
+.pricing-table th,.pricing-table td{padding:10px 12px;border-bottom:1px solid #eee6f3;text-align:left;white-space:nowrap}
+.pricing-table th{background:#5f3f78;color:#fff;font-size:12px}
+.pricing-table td{font-size:13px}
+.pricing-table tbody tr:last-child td{border-bottom:0}
+.pricing-notes{margin-top:14px;padding:12px 14px;border-radius:10px;background:#fff;border:1px solid #e8deef;color:#3f3547}
+.pricing-notes strong{display:block;margin-bottom:6px;color:#4d2f64}
+.pricing-notes ul{margin:0;padding-left:18px}
+.pricing-notes li{margin:5px 0;line-height:1.45}
+@media(max-width:600px){
+  .pricing-quick-ref{margin:12px 0 16px}
+  .pricing-quick-ref summary{padding:12px 13px;align-items:flex-start}
+  .pricing-quick-body{padding:12px}
+  .pricing-internal-badge{font-size:9px}
+  .pricing-table th,.pricing-table td{padding:9px 10px}
+}
