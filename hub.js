@@ -118,20 +118,25 @@ function renderMinimumSpendStatus(b){
 async function syncMinimumSpendTask(b){
  if(!b?.id)return;
  const f=minimumSpendFigures(b);
- const existing=tasks.find(t=>t.booking_id===b.id&&t.task_type==='minimum_spend_shortfall');
+ const emailTask=tasks.find(t=>t.booking_id===b.id&&t.task_type==='minimum_spend_shortfall_email');
+ const followTask=tasks.find(t=>t.booking_id===b.id&&t.task_type==='minimum_spend_shortfall_followup');
  if(!f.minimum||f.sales===null||f.outstanding<=0){
-   if(existing&&existing.status!=='completed'){
-     const r=await db.from('booking_tasks').update({status:'completed',completed_at:new Date().toISOString()}).eq('id',existing.id);if(r.error)throw r.error;
+   for(const task of [emailTask,followTask].filter(Boolean)){
+     if(task.status!=='completed'){
+       const r=await db.from('booking_tasks').update({status:'completed',completed_at:new Date().toISOString()}).eq('id',task.id);if(r.error)throw r.error;
+     }
    }
    return;
  }
- const eventDate=new Date((b.event_date||new Date().toISOString().slice(0,10))+'T12:00:00');eventDate.setDate(eventDate.getDate()+7);
- const due=[eventDate.getFullYear(),String(eventDate.getMonth()+1).padStart(2,'0'),String(eventDate.getDate()).padStart(2,'0')].join('-');
- const title='Collect minimum spend shortfall · '+money(f.outstanding);
- if(existing){
-   const r=await db.from('booking_tasks').update({title,due_date:due,status:'open',completed_at:null}).eq('id',existing.id);if(r.error)throw r.error;
- }else{
-   const r=await db.from('booking_tasks').insert({booking_id:b.id,task_type:'minimum_spend_shortfall',title,due_date:due});if(r.error)throw r.error;
+ const today=new Date(),due=[today.getFullYear(),String(today.getMonth()+1).padStart(2,'0'),String(today.getDate()).padStart(2,'0')].join('-');
+ const emailTitle='Send minimum spend shortfall email · '+money(f.outstanding);
+ if(!emailTask){
+   const r=await db.from('booking_tasks').insert({booking_id:b.id,task_type:'minimum_spend_shortfall_email',title:emailTitle,due_date:due});if(r.error)throw r.error;
+ }else if(emailTask.status==='open'){
+   const r=await db.from('booking_tasks').update({title:emailTitle}).eq('id',emailTask.id);if(r.error)throw r.error;
+ }
+ if(followTask&&followTask.status==='open'){
+   const r=await db.from('booking_tasks').update({title:'Follow up minimum spend shortfall · '+money(f.outstanding)}).eq('id',followTask.id);if(r.error)throw r.error;
  }
 }
 function switchView(name){
@@ -202,10 +207,27 @@ function renderDashboard(){
 }
 async function setTaskCompleted(id,isCompleted,input){
  if(input)input.disabled=true;
+ const taskBefore=tasks.find(t=>t.id===id);
  const r=await db.from('booking_tasks').update({status:isCompleted?'completed':'open',completed_at:isCompleted?new Date().toISOString():null}).eq('id',id);
  if(r.error){if(input){input.checked=!isCompleted;input.disabled=false}return alert(r.error.message)}
+ if(taskBefore?.task_type==='minimum_spend_shortfall_email'){
+   const booking=bookings.find(b=>b.id===taskBefore.booking_id),f=booking?minimumSpendFigures(booking):null;
+   const follow=tasks.find(t=>t.booking_id===taskBefore.booking_id&&t.task_type==='minimum_spend_shortfall_followup');
+   if(isCompleted&&f&&f.outstanding>0){
+     const d=new Date();d.setDate(d.getDate()+3);
+     const due=[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
+     const payload={title:'Follow up minimum spend shortfall · '+money(f.outstanding),due_date:due,status:'open',completed_at:null};
+     const fr=follow
+       ? await db.from('booking_tasks').update(payload).eq('id',follow.id)
+       : await db.from('booking_tasks').insert({booking_id:taskBefore.booking_id,task_type:'minimum_spend_shortfall_followup',...payload});
+     if(fr.error)return alert(fr.error.message);
+   }else if(!isCompleted&&follow&&follow.status==='open'){
+     const fr=await db.from('booking_tasks').update({status:'completed',completed_at:new Date().toISOString()}).eq('id',follow.id);
+     if(fr.error)return alert(fr.error.message);
+   }
+ }
  await refreshAdminData();
- const bookingId=tasks.find(t=>t.id===id)?.booking_id;
+ const bookingId=taskBefore?.booking_id;
  if(bookingId&&$('editBookingId')?.value===bookingId)renderEventChecklist(bookingId);
 }
 function bookingCardMini(b){return '<div class="list-card clickable" data-dashboard-booking="'+b.id+'"><div class="row"><div><div class="event-name">'+esc(b.customer_name)+'</div><div class="meta">'+dmy(b.event_date)+' · '+esc(b.venue)+' · '+esc(bookingEventType(b))+'</div></div><span class="bar-chip '+barClass(b.bar_type)+'">'+barLabel(b.bar_type)+'</span></div></div>'}
