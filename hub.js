@@ -97,7 +97,43 @@ async function refreshAdminData(){
  await Promise.all([refreshStaffingSummary(),refreshBackupStatus(),refreshTeamAccountStatus()]);
  renderDashboard();renderEnquiries();renderBookings();renderCalendar();renderTeam();
 }
-function totalPaid(bookingId){return payments.filter(p=>p.booking_id===bookingId).reduce((s,p)=>s+Number(p.amount||0),0)}
+function totalPaid(bookingId){return payments.filter(p=>p.booking_id===bookingId&&p.payment_type!=='minimum_spend_shortfall').reduce((s,p)=>s+Number(p.amount||0),0)}
+function minimumSpendPaid(bookingId){return payments.filter(p=>p.booking_id===bookingId&&p.payment_type==='minimum_spend_shortfall').reduce((s,p)=>s+Number(p.amount||0),0)}
+function actualBarSales(b){const req=b?.requirements&&typeof b.requirements==='object'?b.requirements:{};const v=req.__actual_bar_sales;return v===null||v===undefined||v===''?null:Number(v)}
+function minimumSpendFigures(b){
+ const minimum=Math.max(0,Number(b?.minimum_spend||0)),sales=actualBarSales(b),paid=minimumSpendPaid(b?.id);
+ if(sales===null)return {minimum,sales:null,paid,shortfall:null,outstanding:null};
+ const shortfall=Math.max(0,minimum-sales),outstanding=Math.max(0,shortfall-paid);
+ return {minimum,sales,paid,shortfall,outstanding};
+}
+function renderMinimumSpendStatus(b){
+ const el=$('minimumSpendStatus');if(!el)return;
+ const f=minimumSpendFigures(b);
+ if(!f.minimum){el.innerHTML='<span>Status</span><b>No minimum spend set.</b>';return}
+ if(f.sales===null){el.innerHTML='<span>Status</span><b>Enter actual bar sales after the event.</b>';return}
+ if(f.shortfall===0){el.innerHTML='<span>Minimum spend</span><b class="balance-clear">Met ✓ · '+money(f.sales)+' sales</b>';return}
+ if(f.outstanding===0){el.innerHTML='<span>Shortfall</span><b class="balance-clear">Paid ✓ · '+money(f.shortfall)+'</b>';return}
+ el.innerHTML='<span>Shortfall payment due</span><b class="balance-due">'+money(f.outstanding)+'</b>';
+}
+async function syncMinimumSpendTask(b){
+ if(!b?.id)return;
+ const f=minimumSpendFigures(b);
+ const existing=tasks.find(t=>t.booking_id===b.id&&t.task_type==='minimum_spend_shortfall');
+ if(!f.minimum||f.sales===null||f.outstanding<=0){
+   if(existing&&existing.status!=='completed'){
+     const r=await db.from('booking_tasks').update({status:'completed',completed_at:new Date().toISOString()}).eq('id',existing.id);if(r.error)throw r.error;
+   }
+   return;
+ }
+ const eventDate=new Date((b.event_date||new Date().toISOString().slice(0,10))+'T12:00:00');eventDate.setDate(eventDate.getDate()+7);
+ const due=[eventDate.getFullYear(),String(eventDate.getMonth()+1).padStart(2,'0'),String(eventDate.getDate()).padStart(2,'0')].join('-');
+ const title='Collect minimum spend shortfall · '+money(f.outstanding);
+ if(existing){
+   const r=await db.from('booking_tasks').update({title,due_date:due,status:'open',completed_at:null}).eq('id',existing.id);if(r.error)throw r.error;
+ }else{
+   const r=await db.from('booking_tasks').insert({booking_id:b.id,task_type:'minimum_spend_shortfall',title,due_date:due});if(r.error)throw r.error;
+ }
+}
 function switchView(name){
  if(profile?.role==='admin')refreshLiveData();
  document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
@@ -505,7 +541,7 @@ function renderTeam(){
  $('formerTeamList').innerHTML=former.length?'<div class="team-grid">'+former.map(r=>renderTeamCard(r,true)).join('')+'</div>':'<p class="muted">No former staff.</p>';
 }
 function requirementRows(obj){
- const entries=Object.entries(obj||{}).filter(([q,a])=>String(q).trim()&&String(a??'').trim());
+ const entries=Object.entries(obj||{}).filter(([q,a])=>!String(q).startsWith('__')&&String(q).trim()&&String(a??'').trim());
  if(!entries.length)return '<p class="muted">No original form requirements stored.</p>';
  const groups={};
  entries.forEach(([q,a])=>{const g=requirementGroup(q);(groups[g]??=[]).push([q,a])});
@@ -562,13 +598,13 @@ function openBooking(id,showRequirements=false,focusTaskId=null){
  $('editBookingId').value=id;$('bookingModalTitle').textContent=b.customer_name||b.event_name;
  $('editCustomer').value=b.customer_name||'';$('editEmail').value=b.customer_email||'';$('editPhone').value=b.customer_phone||'';
  $('editEvent').value=bookingEventType(b)||'';$('editDate').value=b.event_date||'';$('editVenue').value=b.venue||'';$('editGuests').value=b.guest_count||'';
- $('editBar').value=b.bar_type;$('editTotal').value=Number(b.total_amount||0);$('editMinimumSpend').value=Number(b.minimum_spend||0);$('editStaff').value=b.staff_required||1;
+ $('editBar').value=b.bar_type;$('editTotal').value=Number(b.total_amount||0);$('editMinimumSpend').value=Number(b.minimum_spend||0);$('editActualSales').value=actualBarSales(b)??'';$('editStaff').value=b.staff_required||1;
  $('editArrival').value=String(b.arrival_time||'').slice(0,5);$('editStart').value=String(b.start_time||'').slice(0,5);$('editFinish').value=String(b.finish_time||'').slice(0,5);
  $('editTens').checked=!!b.tens_required;$('editNotes').value=b.notes||'';
  $('paymentAmount').value='';$('paymentType').value='balance';$('paymentMethod').value='Bank transfer';$('paymentReference').value='';
  $('bookingEditMsg').textContent='';$('paymentMsg').textContent='';
  $('cancelBookingBtn').classList.toggle('hidden',b.booking_status==='cancelled');
- refreshBookingBalance(b);renderPaymentHistory(id);renderEventChecklist(id);
+ refreshBookingBalance(b);renderPaymentHistory(id);renderEventChecklist(id);renderMinimumSpendStatus(b);
  $('bookingImageInput').value='';$('bookingImageMsg').textContent='';
  $('bookingImageGallery').innerHTML='<p class="booking-image-empty">Loading images…</p>';
  loadBookingImages(id).catch(e=>{$('bookingImageGallery').innerHTML='<p class="booking-image-empty">Could not load images.</p>';$('bookingImageMsg').textContent=e.message||'Could not load images.'});
@@ -622,6 +658,8 @@ async function saveBooking(){
  const customerName=$('editCustomer').value.trim(),eventType=$('editEvent').value.trim();
  const requirements={...(b.requirements&&typeof b.requirements==='object'?b.requirements:{})};
  if(eventType)requirements['Type of event']=eventType;
+ const actualSalesRaw=$('editActualSales').value;
+ if(actualSalesRaw==='')delete requirements.__actual_bar_sales;else requirements.__actual_bar_sales=Number(actualSalesRaw);
  const payload={
    customer_name:customerName,customer_email:$('editEmail').value.trim()||null,customer_phone:$('editPhone').value.trim()||null,
    event_name:customerName,event_date:$('editDate').value,venue:$('editVenue').value.trim(),
@@ -649,7 +687,8 @@ async function saveBooking(){
      if(t1.error)throw t1.error;if(t2.error)throw t2.error;
    }
    await refreshAdminData();
-   const updated=bookings.find(x=>x.id===id);if(updated){refreshBookingBalance(updated);renderPaymentHistory(id)}
+   let updated=bookings.find(x=>x.id===id);
+   if(updated){await syncMinimumSpendTask(updated);await refreshAdminData();updated=bookings.find(x=>x.id===id);refreshBookingBalance(updated);renderPaymentHistory(id);renderEventChecklist(id);renderMinimumSpendStatus(updated)}
    $('bookingEditMsg').textContent='Saved.';
  }catch(e){$('bookingEditMsg').textContent=e.message||'Could not save booking.'}
  finally{$('saveBookingBtn').disabled=false}
@@ -780,7 +819,8 @@ async function addPayment(){
    const r=await db.from('booking_payments').insert({booking_id:id,amount,payment_type:$('paymentType').value,method:$('paymentMethod').value||null,reference:$('paymentReference').value.trim()||null});
    if(r.error)throw r.error;
    await refreshAdminData();
-   const updated=bookings.find(x=>x.id===id);if(updated){refreshBookingBalance(updated);renderPaymentHistory(id)}
+   let updated=bookings.find(x=>x.id===id);
+   if(updated){await syncMinimumSpendTask(updated);await refreshAdminData();updated=bookings.find(x=>x.id===id);refreshBookingBalance(updated);renderPaymentHistory(id);renderEventChecklist(id);renderMinimumSpendStatus(updated)}
    $('paymentAmount').value='';$('paymentReference').value='';$('paymentMsg').textContent='Payment recorded.';
  }catch(e){$('paymentMsg').textContent=e.message||'Could not record payment.'}
  finally{$('addPaymentBtn').disabled=false}
@@ -875,7 +915,9 @@ document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>switchView(b.data
 document.querySelectorAll('[data-jump]').forEach(b=>{b.onclick=()=>switchView(b.dataset.jump);b.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();switchView(b.dataset.jump)}}});
 $('mobileMenuBtn').onclick=()=>document.querySelector('.sidebar').classList.toggle('open');
 $('newEnquiryBtn').onclick=()=>{['eqCustomer','eqEmail','eqPhone','eqEvent','eqDate','eqVenue','eqGuests','eqNotes'].forEach(id=>$(id).value='');$('enquiryMsg').textContent='';openModal('enquiryModal')};
-$('saveEnquiryBtn').onclick=saveEnquiry;$('confirmAcceptBtn').onclick=acceptBooking;$('saveBookingBtn').onclick=saveBooking;$('addPaymentBtn').onclick=addPayment;$('uploadBookingImagesBtn').onclick=uploadBookingImages;$('cancelBookingBtn').onclick=()=>openCancelBooking($('editBookingId').value);$('confirmCancelBookingBtn').onclick=confirmCancelBooking;$('keepBookingBtn').onclick=()=>$('cancelBookingModal').classList.add('hidden');
+$('saveEnquiryBtn').onclick=saveEnquiry;$('confirmAcceptBtn').onclick=acceptBooking;$('saveBookingBtn').onclick=saveBooking;$('addPaymentBtn').onclick=addPayment;
+$('editActualSales')?.addEventListener('input',()=>{const b=bookings.find(x=>x.id===$('editBookingId').value);if(!b)return;const clone={...b,requirements:{...(b.requirements||{})}};const raw=$('editActualSales').value;if(raw==='')delete clone.requirements.__actual_bar_sales;else clone.requirements.__actual_bar_sales=Number(raw);renderMinimumSpendStatus(clone)});
+$('editMinimumSpend')?.addEventListener('input',()=>{const b=bookings.find(x=>x.id===$('editBookingId').value);if(!b)return;const clone={...b,minimum_spend:Number($('editMinimumSpend').value||0),requirements:{...(b.requirements||{})}};const raw=$('editActualSales').value;if(raw==='')delete clone.requirements.__actual_bar_sales;else clone.requirements.__actual_bar_sales=Number(raw);renderMinimumSpendStatus(clone)});$('uploadBookingImagesBtn').onclick=uploadBookingImages;$('cancelBookingBtn').onclick=()=>openCancelBooking($('editBookingId').value);$('confirmCancelBookingBtn').onclick=confirmCancelBooking;$('keepBookingBtn').onclick=()=>$('cancelBookingModal').classList.add('hidden');
 document.querySelectorAll('[data-close-modal]').forEach(b=>b.onclick=closeModals);
 document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModals()}));
 $('teamSearch')?.addEventListener('input',renderTeam);
