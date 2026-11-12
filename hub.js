@@ -139,12 +139,23 @@ async function syncMinimumSpendTask(b){
    const r=await db.from('booking_tasks').update({title:'Follow up minimum spend shortfall · '+money(f.outstanding)}).eq('id',followTask.id);if(r.error)throw r.error;
  }
 }
+window.addEventListener('message',event=>{
+ if(event.origin!==window.location.origin||event.data?.type!=='kmb-stock-height')return;
+ const stockFrame=document.querySelector('.stock-frame');
+ if(stockFrame?.contentWindow!==event.source)return;
+ const height=Number(event.data.height);
+ if(Number.isFinite(height)&&height>=200&&height<=15000)stockFrame.style.height=Math.ceil(height+16)+'px';
+});
 function switchView(name){
  if(profile?.role==='admin')refreshLiveData();
  document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
  const el=$(name+'View');if(el)el.classList.remove('hidden');
  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===name));
  $('viewTitle').textContent=({dashboard:'Dashboard',enquiries:'Enquiries',bookings:'Bookings',calendar:'Calendar',staffing:'Staffing',team:'Team',support:'Support',stock:'Stock'}[name]||'Knights Hub');
+ if(name==='stock'){
+   const stockFrame=document.querySelector('.stock-frame');
+   if(stockFrame?.dataset.stockSrc && stockFrame.getAttribute('src')==='about:blank') stockFrame.src=stockFrame.dataset.stockSrc;
+ }
  if(name==='calendar')renderCalendar();
  if(name==='team')renderTeam();
  if(name==='support')loadSupportTickets().catch(e=>{$('supportMsg').textContent=e.message||'Could not load support tickets.'});
