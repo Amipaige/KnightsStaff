@@ -1,4 +1,4 @@
-const CACHE_NAME='kmb-hub-v5';
+const CACHE_NAME='kmb-hub-v6';
 const APP_SHELL=[
   './',
   './hub.html',
@@ -10,7 +10,8 @@ const APP_SHELL=[
   './favicon.png',
   './favicon.svg',
   './staffing.html',
-  './photo-stock-take.html'
+  './photo-stock-take.html',
+  './manual-stocktake.html'
 ];
 
 self.addEventListener('install',event=>{
