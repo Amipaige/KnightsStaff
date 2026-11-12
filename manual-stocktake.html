@@ -250,6 +250,11 @@ $('addForm').onsubmit=add;$('saveBtn').onclick=save;$('search').oninput=render;
 $('downloadBtn').onclick=currentCSV;$('backupAllBtn').onclick=fullBackup;
 $('recentEntries').onclick=e=>{const b=e.target.closest('[data-remove]');if(b)remove(b.dataset.remove)};
 $('cost').oninput=()=>{$('costHint').textContent='This purchase cost will be saved for this count and suggested next time.'};
+if(window.parent!==window && typeof ResizeObserver==='function'){
+ const sendHeight=()=>window.parent.postMessage({type:'kmb-stock-height',height:document.documentElement.scrollHeight},window.location.origin);
+ new ResizeObserver(sendHeight).observe(document.body);
+ window.addEventListener('load',sendHeight);
+}
 init();
 })();
 </script>
