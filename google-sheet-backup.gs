@@ -6,6 +6,7 @@
 
 const KNIGHTS_BACKUP = {
   endpoint: 'https://jpjrsndbjklecvwiuvbf.supabase.co/functions/v1/staffing-backup-export',
+  hubEndpoint: 'https://jpjrsndbjklecvwiuvbf.supabase.co/functions/v1/hub-backup-export',
   anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwanJzbmRiamtsZWN2d2l1dmJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY1MzQ1MTQsImV4cCI6MjEwMjExMDUxNH0.KrNOCgc71pyc7vNgWdy9juQCz5PiEl0oIQ52QFv-9FE',
   timezone: 'Europe/London',
   sheets: {
@@ -15,7 +16,10 @@ const KNIGHTS_BACKUP = {
     pending: 'Pending Requests',
     staff: 'Staff Directory',
     history: 'History',
-    log: 'Backup Log'
+    log: 'Backup Log',
+    hubIndex: 'Hub Backup Index',
+    hubData: 'Hub Database Records',
+    stockHistory: 'Hub Stocktake History'
   }
 };
 
@@ -80,7 +84,7 @@ function syncStaffingBackup() {
   const ss = getBackupSpreadsheet_();
   ensureCoreSheets_(ss);
 
-  let data;
+  let data, hubData;
   try {
     const response = UrlFetchApp.fetch(KNIGHTS_BACKUP.endpoint, {
       method: 'post',
@@ -104,6 +108,9 @@ function syncStaffingBackup() {
 
     data = JSON.parse(body);
     validatePayload_(data);
+    // Complete Hub snapshot is required before touching any live Google Sheet tab.
+    hubData = fetchFullHubBackup_(key);
+    validateFullHubBackup_(hubData);
   } catch (error) {
     logBackup_(ss, 'FAILED', null, error.message || String(error));
     setStatusValue_(ss, 'Last sync status', 'FAILED — previous good snapshot kept');
@@ -112,6 +119,7 @@ function syncStaffingBackup() {
   }
 
   const prepared = prepareTables_(data);
+  prepared.liveTables.push(...prepareFullHubTables_(hubData));
   const stamp = Utilities.formatDate(new Date(), KNIGHTS_BACKUP.timezone, 'yyyyMMdd_HHmmss');
   const staged = [];
 
@@ -132,10 +140,10 @@ function syncStaffingBackup() {
       item.temp.setName(item.liveName);
     }
 
-    updateStatusSheet_(ss, data);
+    updateStatusSheet_(ss, data, hubData);
     appendDailyHistory_(ss, data);
     logBackup_(ss, 'SUCCESS', data.counts, '');
-    acknowledgeBackupSuccess_(key, data);
+    acknowledgeBackupSuccess_(key, data, hubData);
     setStatusValue_(ss, 'Last sync status', 'SUCCESS');
     setStatusValue_(ss, 'Last error', '');
     SpreadsheetApp.flush();
@@ -153,7 +161,7 @@ function syncStaffingBackup() {
   }
 }
 
-function acknowledgeBackupSuccess_(key, data) {
+function acknowledgeBackupSuccess_(key, data, hubData) {
   try {
     UrlFetchApp.fetch(KNIGHTS_BACKUP.endpoint, {
       method: 'post',
@@ -166,7 +174,12 @@ function acknowledgeBackupSuccess_(key, data) {
       payload: JSON.stringify({
         action: 'ack_success',
         source_generated_at: data.generated_at,
-        counts: data.counts || {}
+        counts: {
+          ...(data.counts || {}),
+          hub_tables: Object.keys(hubData.tables || {}).length,
+          hub_rows: Object.values(hubData.counts || {}).reduce((n, v) => n + Number(v || 0), 0),
+          stocktakes: (hubData.tables.kmb_stocktake_sessions || []).length
+        }
       }),
       muteHttpExceptions: true
     });
@@ -224,6 +237,114 @@ function prepareTables_(data) {
   };
 }
 
+
+/**
+ * Full Hub backup extension.
+ * Uses the same private Apps Script backup key and hourly trigger as the
+ * existing staffing backup. No new login, Sheets connection, or schedule.
+ * All Hub database records are copied; Supabase Auth passwords and Storage
+ * file binaries are not exported into Google Sheets.
+ */
+function fetchFullHubBackup_(key) {
+  const response=UrlFetchApp.fetch(KNIGHTS_BACKUP.hubEndpoint,{
+    method:'post',
+    contentType:'application/json',
+    headers:{
+      Authorization:'Bearer '+KNIGHTS_BACKUP.anonKey,
+      apikey:KNIGHTS_BACKUP.anonKey,
+      'x-backup-key':key
+    },
+    payload:JSON.stringify({action:'export'}),
+    muteHttpExceptions:true
+  });
+  const code=response.getResponseCode();
+  const body=response.getContentText();
+  if(code!==200){
+    let detail=body;
+    try{detail=JSON.parse(body).error||body}catch(_){}
+    throw new Error('Full Hub backup service returned '+code+': '+detail);
+  }
+  try{return JSON.parse(body)}catch(_){throw new Error('Full Hub backup returned invalid JSON.')}
+}
+function validateFullHubBackup_(data){
+  if(!data || data.success!==true || !data.generated_at || !data.tables || typeof data.tables!=='object')
+    throw new Error('Full Hub backup data is missing.');
+  const required=[
+    'booking_enquiries','bookings','booking_payments','booking_tasks',
+    'booking_checklist_items','booking_images','bar_events','shift_signups',
+    'staff_profiles','staff_information','deleted_staff_members',
+    'support_tickets','kmb_stocktake_sessions','kmb_stocktake_entries',
+    'stock_products','stock_receipts','stock_sales_reports','stock_takes',
+    'products','stock_movements','sumup_transactions'
+  ];
+  required.forEach(table=>{
+    if(!Array.isArray(data.tables[table]))throw new Error('Full Hub backup missing '+table+'.');
+    if(!Number.isInteger(Number(data.counts?.[table])) || Number(data.counts[table])!==data.tables[table].length)
+      throw new Error('Incomplete Hub backup for '+table+'.');
+  });
+}
+// Escape data entered by customers/staff to prevent spreadsheet formula execution.
+function safeSheetText_(value){
+  const text=String(value==null?'':value);
+  return /^[\s]*[=+\-@]/.test(text) ? "'"+text : text;
+}
+function prepareFullHubTables_(data){
+  const allRows=[];
+  const chunkSize=35000;
+  let longest=1;
+  Object.keys(data.tables).sort().forEach(table=>{
+    data.tables[table].forEach((record,index)=>{
+      const serialized=JSON.stringify(record);
+      if(!serialized || serialized.length>chunkSize*20)
+        throw new Error('Hub record too large for Google Sheets in '+table+'.');
+      const chunks=[];
+      for(let i=0;i<serialized.length;i+=chunkSize)chunks.push(serialized.slice(i,i+chunkSize));
+      longest=Math.max(longest,chunks.length);
+      allRows.push({table,id:safeSheetText_(record?.id||record?.profile_id||String(index+1)),chunks});
+    });
+  });
+  const headers=['Database table','Record ID',...Array.from({length:longest},(_,i)=>'Row JSON '+(i+1))];
+  const databaseRows=allRows.map(record=>[record.table,record.id,...record.chunks,...Array(longest-record.chunks.length).fill('')]);
+  const tableRows=Object.keys(data.tables).sort().map(table=>[
+    table, data.counts[table], new Date(data.generated_at)
+  ]);
+  const sessions=new Map((data.tables.kmb_stocktake_sessions||[]).map(s=>[s.id,s]));
+  const stockRows=[];
+  const entries=data.tables.kmb_stocktake_entries||[];
+  const sessionWithEntries=new Set(entries.map(e=>e.session_id));
+  for(const s of data.tables.kmb_stocktake_sessions||[]){
+    if(!sessionWithEntries.has(s.id))
+      stockRows.push([s.taken_on,s.status,'','','',0,'',0,'',s.id]);
+  }
+  for(const entry of entries){
+    const s=sessions.get(entry.session_id)||{};
+    stockRows.push([
+      s.taken_on||'',safeSheetText_(s.status||''),safeSheetText_(entry.category||''),
+      safeSheetText_(entry.product_name||''),safeSheetText_(entry.size_label||''),
+      Number(entry.quantity||0),
+      entry.unit_cost===null?'':Number(entry.unit_cost),
+      entry.unit_cost===null?'':Number((Number(entry.quantity||0)*Number(entry.unit_cost)).toFixed(2)),
+      safeSheetText_(entry.entry_type||''),entry.session_id||''
+    ]);
+  }
+  stockRows.sort((a,b)=>String(b[0]).localeCompare(String(a[0]))||String(a[3]).localeCompare(String(b[3])));
+  return [
+    {
+      name:KNIGHTS_BACKUP.sheets.hubIndex,
+      headers:['Database table','Records','Export timestamp'],
+      rows:tableRows
+    },{
+      name:KNIGHTS_BACKUP.sheets.hubData,
+      headers,
+      rows:databaseRows
+    },{
+      name:KNIGHTS_BACKUP.sheets.stockHistory,
+      headers:['Stocktake date','Status','Category','Drink','Size','Bottle equivalents','Purchase cost / unit GBP','Stock value GBP','Count type','Stocktake ID'],
+      rows:stockRows
+    }
+  ];
+}
+
 function writeTable_(sheet, headers, rows) {
   sheet.clear();
   sheet.getRange(1,1,1,headers.length).setValues([headers]);
@@ -260,7 +381,7 @@ function ensureCoreSheets_(ss) {
 function setupStatusSheet_(ss) {
   const sheet=ss.getSheetByName(KNIGHTS_BACKUP.sheets.status);
   if (sheet.getLastRow()===0) {
-    sheet.getRange('A1:B1').setValues([['Knights Staffing Backup','Value']]);
+    sheet.getRange('A1:B1').setValues([['Knights Hub Backup','Value']]);
     sheet.getRange('A1:B1').setBackground('#171716').setFontColor('#ffffff').setFontWeight('bold');
     sheet.getRange('A2:A9').setValues([
       ['Last successful sync'],['Last sync status'],['Last error'],['Upcoming events'],
@@ -272,13 +393,19 @@ function setupStatusSheet_(ss) {
   }
 }
 
-function updateStatusSheet_(ss,data) {
+function updateStatusSheet_(ss,data,hubData) {
   setStatusValue_(ss,'Last successful sync',new Date(data.generated_at));
   setStatusValue_(ss,'Upcoming events',data.counts.events);
   setStatusValue_(ss,'Confirmed assignments',data.counts.confirmed_staffing);
   setStatusValue_(ss,'Pending requests',data.counts.pending_requests);
   setStatusValue_(ss,'Staff records',data.counts.staff);
   setStatusValue_(ss,'Hourly sync','Installed');
+  if(hubData){
+    setStatusValue_(ss,'Hub tables included',Object.keys(hubData.tables || {}).length);
+    setStatusValue_(ss,'Hub database records',Object.values(hubData.counts || {}).reduce((n,v)=>n+Number(v||0),0));
+    setStatusValue_(ss,'Stocktakes saved',(hubData.tables.kmb_stocktake_sessions || []).length);
+    setStatusValue_(ss,'Full Hub export at',new Date(hubData.generated_at));
+  }
   ss.getSheetByName(KNIGHTS_BACKUP.sheets.status).getRange('B2').setNumberFormat('ddd d mmm yyyy hh:mm:ss');
 }
 
