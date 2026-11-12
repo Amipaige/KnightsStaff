@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#171716">
+<title>Knights · Stock Control</title>
+<link rel="icon" href="logo-exact.svg" type="image/svg+xml">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2"></script>
+<style>
+:root{color-scheme:light;--ink:#252120;--muted:#706c69;--paper:#f6f3ee;--line:#e4ded5;--accent:#71448c;--deep:#211925;--white:#fff}
+*{box-sizing:border-box}body{margin:0;color:var(--ink);background:var(--paper);font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;font-size:15px}
+main{max-width:1100px;margin:auto;padding:16px 14px 60px}.hero{background:var(--deep);color:#fff;border-radius:18px;padding:19px 20px;margin-bottom:16px}
+.eyebrow{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:#c8accf;font-weight:800}.hero h1{margin:4px 0;font-size:27px}.hero p{margin:0;color:#d2c4d7;font-size:13px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:17px;padding:18px;margin:0 0 14px}
+h2{font-size:19px;margin:0 0 7px}h3{font-size:16px;margin:0 0 8px}p{line-height:1.45}.muted{color:var(--muted);font-size:13px;margin:4px 0 12px}
+label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
+input,select,textarea{width:100%;border:1px solid #cfc8bf;background:#fff;border-radius:9px;padding:11px;font:inherit;min-width:0;color:var(--ink)}
+textarea{resize:vertical}button{border:0;border-radius:10px;font:inherit;font-weight:750;cursor:pointer;padding:11px 15px;white-space:normal}
+button:disabled{opacity:.55;cursor:not-allowed}.primary{background:var(--accent);color:#fff}.secondary{background:#f1eaf4;color:#512968}
+.ghost{border:1px solid var(--line);background:#fff;color:var(--ink)}.danger{background:#f9e8e7;color:#8e3737}
+.flex{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.between{justify-content:space-between}.form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.field{min-width:0}.full{grid-column:1/-1}.hidden{display:none!important}
+.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin:14px 0}.stat{background:#f8f5f9;border-radius:12px;padding:13px}
+.stat span{display:block;color:var(--muted);font-size:12px}.stat strong{display:block;font-size:23px;margin-top:3px}
+.info{padding:11px 12px;border-radius:10px;font-size:13px;background:#f2edf5;color:#523760;margin:10px 0}
+.message{font-weight:700;font-size:13px;min-height:20px;margin-top:12px}.message.ok{color:#246d47}.message.err{color:#9a3636}
+.count-mode{display:flex;gap:10px;flex-wrap:wrap}.count-mode label{margin:0;display:flex;align-items:center;gap:7px;font-weight:600;background:#f8f6f3;border:1px solid var(--line);padding:9px 10px;border-radius:10px}
+.count-mode input{width:auto;accent-color:var(--accent)}
+.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:550px}th{text-align:left;color:var(--muted);font-size:12px}td,th{border-bottom:1px solid #eee7e0;padding:11px 8px}td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.entries{display:grid;gap:9px}.entry{border:1px solid var(--line);border-radius:11px;padding:11px;display:flex;gap:12px;align-items:center;justify-content:space-between}
+.entry b{display:block}.entry small{display:block;color:var(--muted);line-height:1.5}.entry button{font-size:12px;padding:8px 10px}
+.tab-actions{display:flex;gap:8px;flex-wrap:wrap}.tiny{font-size:12px;color:var(--muted)}
+@media(max-width:700px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.summary{grid-template-columns:repeat(2,minmax(0,1fr))}.stat strong{font-size:21px}}
+@media(max-width:420px){.form-grid{grid-template-columns:1fr}.summary{grid-template-columns:1fr 1fr}main{padding:10px 9px 40px}.panel{padding:14px}}
+</style>
+</head>
+<body>
+<main>
+<header class="hero"><div class="eyebrow">Knights Mobile Bars · KMB.Hub</div><h1>Stock Control</h1><p>Add bottles as you find them. Totals build automatically and every stocktake is saved by date.</p></header>
+<div id="gate" class="panel"><p class="muted">Checking your Hub login…</p></div>
+<div id="app" class="hidden">
+  <section class="panel">
+    <div class="flex between"><div><h2>Stocktake history</h2><p class="muted">Choose a saved stocktake or start a fresh count. Old counts are never overwritten.</p></div><button id="newBtn" class="secondary" type="button">+ New stocktake</button></div>
+    <label for="sessionSelect">Saved stocktakes</label><select id="sessionSelect"><option value="">No stocktakes yet</option></select>
+    <div id="newBox" class="hidden" style="margin-top:15px;padding:14px;border-radius:12px;background:#f8f6f3">
+      <h3>Start a new stocktake</h3><div class="form-grid">
+        <div class="field"><label for="newDate">Date counted</label><input id="newDate" type="date"></div>
+        <div class="field"><label for="newLabel">Name</label><input id="newLabel" maxlength="100" value="Warehouse stocktake" placeholder="e.g. November stocktake"></div>
+        <div class="field" style="align-self:end"><button id="saveSessionBtn" class="primary" type="button" style="width:100%">Start stocktake</button></div>
+      </div>
+      <div id="newMessage" class="message" aria-live="polite"></div>
+    </div>
+  </section>
+  <div id="active" class="hidden">
+    <section class="panel">
+      <div class="flex between">
+        <div><h2 id="currentHeading">Current stocktake</h2><p id="currentSubtitle" class="muted"></p></div>
+        <div class="tab-actions"><button id="exportBtn" class="ghost" type="button">Download CSV</button><button id="completeBtn" class="secondary" type="button">Finish stocktake</button></div>
+      </div>
+      <div class="summary">
+        <div class="stat"><span>Different products</span><strong id="itemTotal">0</strong></div>
+        <div class="stat"><span>Bottle / can equivalents</span><strong id="unitTotal">0</strong></div>
+        <div class="stat"><span>Known stock cost</span><strong id="costTotal">£0.00</strong></div>
+      </div>
+      <p id="valuationNote" class="tiny"></p>
+    </section>
+    <section id="entryPanel" class="panel">
+      <h2>Add to your count</h2><p class="muted">Found another crate? Enter it here. If you've counted the same drink before, it adds to the total.</p>
+      <form id="addForm">
+        <div class="form-grid">
+          <div class="field"><label for="category">Category</label><select id="category"><option>Beer &amp; ale</option><option>Cider</option><option>Spirits</option><option>Wine &amp; prosecco</option><option>Soft drinks</option><option>Mixers</option><option>Other</option></select></div>
+          <div class="field"><label for="product">Drink / brand</label><input id="product" required maxlength="140" list="productOptions" placeholder="e.g. Birra Moretti"><datalist id="productOptions"></datalist></div>
+          <div class="field"><label for="size">Bottle / can size</label><input id="size" maxlength="30" placeholder="e.g. 330ml, 70cl"></div>
+          <div class="field full"><label>How are you counting?</label><div class="count-mode">
+            <label><input type="radio" name="mode" value="loose" checked> Loose bottles / cans</label>
+            <label><input type="radio" name="mode" value="case"> Full sealed cases</label>
+            <label><input type="radio" name="mode" value="partial"> Opened spirit bottles</label>
+          </div></div>
+          <div id="looseFields" class="field"><label for="looseQty">Number of bottles / cans</label><input id="looseQty" type="number" min="1" step="1" value="1"></div>
+          <div id="caseFields" class="field full hidden"><div class="form-grid">
+            <div class="field"><label for="caseQty">Number of cases</label><input id="caseQty" type="number" min="1" step="1" value="1"></div>
+            <div class="field"><label for="perCase">Bottles / cans per case</label><input id="perCase" type="number" min="1" step="1" value="24"></div>
+          </div></div>
+          <div id="partialFields" class="field full hidden"><div class="form-grid">
+            <div class="field"><label for="partialQty">Opened bottles</label><input id="partialQty" type="number" min="1" step="1" value="1"></div>
+            <div class="field"><label for="partialFraction">Amount left in each</label><select id="partialFraction"><option value="0.1">10% left</option><option value="0.25">¼ bottle</option><option value="0.5" selected>½ bottle</option><option value="0.75">¾ bottle</option><option value="0.9">90% left</option></select></div>
+          </div></div>
+          <div class="field"><label for="unitCost">Purchase cost per full bottle / can (£)</label><input id="unitCost" type="number" min="0" step="0.01" placeholder="Optional"></div>
+          <div class="field full"><label for="note">Notes / crate number</label><input id="note" maxlength="200" placeholder="Optional, e.g. Crate 4"></div>
+        </div>
+        <div style="margin-top:15px" class="flex"><button id="addBtn" class="primary" type="submit">+ Add to stocktake</button><span id="calcPreview" class="tiny"></span></div>
+        <div id="addMessage" class="message" aria-live="polite"></div>
+      </form>
+    </section>
+    <section class="panel">
+      <h2>Running totals</h2><p class="muted">The same brand and size are combined automatically, even when found in different crates.</p>
+      <div id="totalTable" class="table-wrap"></div>
+    </section>
+    <section class="panel">
+      <h2>What you've added</h2><p class="muted">Each addition is saved. Remove an incorrect entry without losing the rest of your stocktake.</p>
+      <div id="entries" class="entries"></div>
+    </section>
+  </div>
+</div>
+</main>
+<script>
+(function(){
+'use strict';
+const URL_BASE='https://jpjrsndbjklecvwiuvbf.supabase.co';
+const KEY='sb_publishable_3xafRje7lv0WNnV1wkdU4Q_Yo3NYrW7';
+const db=window.supabase.createClient(URL_BASE,KEY);
+const $=id=>document.getElementById(id);
+const gbp=v=>'£'+Number(v||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+const qty=v=>Number(v).toLocaleString('en-GB',{maximumFractionDigits:3});
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const currentDate=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const niceDate=v=>v?new Date(v+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'';
+let sessions=[],entries=[],selected=null,loading=false;
+function flash(el,message,failed){el.textContent=message;el.className='message '+(failed?'err':'ok')}
+function failText(e){return e&&e.message?e.message:String(e)}
+function selectedSession(){return sessions.find(s=>s.id===selected)}
+function isOpen(){return selectedSession()?.status==='open'}
+function mode(){return document.querySelector('input[name="mode"]:checked').value}
+function countQuantity(){
+ const m=mode();
+ if(m==='case')return Number($('caseQty').value)*Number($('perCase').value);
+ if(m==='partial')return Number($('partialQty').value)*Number($('partialFraction').value);
+ return Number($('looseQty').value);
+}
+function renderMode(){
+ const m=mode();$('looseFields').classList.toggle('hidden',m!=='loose');$('caseFields').classList.toggle('hidden',m!=='case');$('partialFields').classList.toggle('hidden',m!=='partial');
+ const n=countQuantity();$('calcPreview').textContent=Number.isFinite(n)&&n>0?qty(n)+' bottle/can equivalent'+(n===1?'':'s'):'Enter a valid count';
+}
+async function init(){
+ $('newDate').value=currentDate();
+ if(!window.supabase){$('gate').textContent='Could not load the stock control library. Check your internet connection.';return}
+ try{
+  const {data,error}=await db.auth.getUser();if(error||!data?.user)throw new Error('Please sign in to KMB.Hub first, then reopen Stock.');
+  const r=await db.from('staff_profiles').select('role').eq('id',data.user.id).maybeSingle();
+  if(r.error||r.data?.role!=='admin')throw new Error('Stocktakes are available to Hub administrators only.');
+  $('gate').classList.add('hidden');$('app').classList.remove('hidden');await loadSessions();
+ }catch(e){$('gate').textContent=failText(e)}
+}
+async function loadSessions(preferred){
+ const r=await db.from('kmb_stocktake_sessions').select('*').order('taken_on',{ascending:false}).order('created_at',{ascending:false});
+ if(r.error)throw r.error;sessions=r.data||[];
+ if(preferred&&sessions.some(s=>s.id===preferred))selected=preferred;
+ else if(!sessions.some(s=>s.id===selected))selected=(sessions.find(s=>s.status==='open')||sessions[0])?.id||null;
+ const pick=$('sessionSelect');
+ pick.innerHTML=sessions.length?sessions.map(s=>'<option value="'+esc(s.id)+'">'+esc(niceDate(s.taken_on)+' · '+s.label+(s.status==='completed'?' (finished)':' (in progress)'))+'</option>').join(''):'<option value="">No stocktakes saved yet</option>';
+ pick.value=selected||'';
+ $('newBox').classList.toggle('hidden',sessions.length>0);
+ await loadEntries();
+}
+async function loadEntries(){
+ const s=selectedSession();$('active').classList.toggle('hidden',!s);
+ if(!s){entries=[];return}
+ let all=[],offset=0,part;
+ do{
+  const r=await db.from('kmb_stocktake_entries').select('*').eq('session_id',s.id).order('created_at',{ascending:false}).range(offset,offset+499);
+  if(r.error)throw r.error;part=r.data||[];all=all.concat(part);offset+=part.length;
+ }while(part.length===500);
+ entries=all;render();
+}
+function groupEntries(){
+ const groups=new Map();
+ for(const e of entries){
+  const key=[e.category.trim().toLowerCase(),e.product_name.trim().replace(/\s+/g,' ').toLowerCase(),(e.size_label||'').trim().toLowerCase()].join('|');
+  if(!groups.has(key))groups.set(key,{name:e.product_name.trim(),size:e.size_label||'',category:e.category,quantity:0,known:0,unpriced:0});
+  const g=groups.get(key);const count=Number(e.quantity);g.quantity+=count;
+  if(e.unit_cost===null||e.unit_cost===undefined)g.unpriced+=count;
+  else g.known+=count*Number(e.unit_cost);
+ }
+ return [...groups.values()].sort((a,b)=>a.category.localeCompare(b.category)||a.name.localeCompare(b.name));
+}
+function render(){
+ const s=selectedSession();if(!s)return;
+ $('currentHeading').textContent=s.label;
+ $('currentSubtitle').textContent=niceDate(s.taken_on)+' · '+(s.status==='open'?'In progress — every addition saves immediately':'Finished — saved for your records');
+ $('entryPanel').classList.toggle('hidden',s.status!=='open');
+ $('completeBtn').classList.toggle('hidden',s.status!=='open');
+ const groups=groupEntries();const allUnits=groups.reduce((sum,g)=>sum+g.quantity,0);
+ const known=groups.reduce((sum,g)=>sum+g.known,0);const missing=groups.filter(g=>g.unpriced>0).length;
+ $('itemTotal').textContent=groups.length;$('unitTotal').textContent=qty(allUnits);$('costTotal').textContent=gbp(known);
+ $('valuationNote').textContent=missing?missing+' product'+(missing===1?' has':'s have')+' some stock without a purchase cost. Value shown is only the priced portion, not the full stock valuation.':'Purchase-cost value of all counted stock with prices entered.';
+ $('totalTable').innerHTML=groups.length?'<table><thead><tr><th>Drink</th><th>Category</th><th class="num">Total</th><th class="num">Known cost</th></tr></thead><tbody>'+groups.map(g=>'<tr><td><b>'+esc(g.name)+'</b><div class="tiny">'+esc(g.size)+'</div></td><td>'+esc(g.category)+'</td><td class="num">'+qty(g.quantity)+'</td><td class="num">'+(g.unpriced?'Incomplete':gbp(g.known))+'</td></tr>').join('')+'</tbody></table>':'<p class="muted">No bottles counted yet. Add the first crate above.</p>';
+ $('entries').innerHTML=entries.length?entries.map(e=>{
+  let detail=e.entry_type==='case'?e.cases_count+' case(s) × '+e.units_per_case:e.entry_type==='partial'?e.partial_bottles+' opened bottle(s) × '+Math.round(Number(e.partial_fraction)*100)+'%':qty(e.quantity)+' loose';
+  detail+=' = '+qty(e.quantity)+' equivalent'+(Number(e.quantity)===1?'':'s');
+  return '<div class="entry"><div><b>'+esc(e.product_name)+' <span class="tiny">'+esc(e.size_label||'')+'</span></b><small>'+esc(e.category)+' · '+esc(detail)+(e.note?' · '+esc(e.note):'')+'</small><small>'+ (e.unit_cost===null?'Cost not entered':gbp(Number(e.unit_cost)*Number(e.quantity))+' at '+gbp(e.unit_cost)+' each') +'</small></div>'+(isOpen()?'<button class="danger" type="button" data-remove="'+esc(e.id)+'" aria-label="Remove this count">Remove</button>':'')+'</div>'
+ }).join(''):'<p class="muted">Nothing added yet.</p>';
+ const options=new Set(entries.map(e=>e.product_name));$('productOptions').innerHTML=[...options].map(x=>'<option value="'+esc(x)+'"></option>').join('');
+}
+async function createSession(){
+ if(loading)return;
+ const date=$('newDate').value, label=$('newLabel').value.trim()||'Stocktake';
+ if(!date)return flash($('newMessage'),'Choose a date first.',true);
+ try{
+  loading=true;$('saveSessionBtn').disabled=true;
+  const r=await db.from('kmb_stocktake_sessions').insert({taken_on:date,label}).select('id').single();
+  if(r.error)throw r.error;
+  selected=r.data.id;await loadSessions(selected);
+  flash($('newMessage'),'Stocktake started.',false);
+ }catch(e){flash($('newMessage'),failText(e),true)}
+ finally{loading=false;$('saveSessionBtn').disabled=false}
+}
+async function addEntry(event){
+ event.preventDefault();if(loading||!isOpen())return;
+ const name=$('product').value.trim().replace(/\s+/g,' ');
+ const quantity=countQuantity(),m=mode(),costText=$('unitCost').value.trim(),cost=costText===''?null:Number(costText);
+ if(!name)return flash($('addMessage'),'Enter the drink name.',true);
+ if(!Number.isFinite(quantity)||quantity<=0||quantity>100000||Math.round(quantity*1000)!==quantity*1000)return flash($('addMessage'),'Enter a valid quantity.',true);
+ const count=m==='case'?Number($('caseQty').value):m==='partial'?Number($('partialQty').value):Number($('looseQty').value);
+ if(!Number.isSafeInteger(count)||count<1)return flash($('addMessage'),'Use whole numbers for bottles and cases.',true);
+ if(m==='case'&&(!Number.isSafeInteger(Number($('perCase').value))||Number($('perCase').value)<1))return flash($('addMessage'),'Enter a valid number per case.',true);
+ if(cost!==null&&(!Number.isFinite(cost)||cost<0||cost>100000))return flash($('addMessage'),'Check the purchase cost.',true);
+ const row={session_id:selected,product_name:name,category:$('category').value,size_label:$('size').value.trim(),entry_type:m,quantity:quantity,unit_cost:cost,note:$('note').value.trim(),
+  cases_count:m==='case'?Number($('caseQty').value):null,units_per_case:m==='case'?Number($('perCase').value):null,
+  partial_bottles:m==='partial'?Number($('partialQty').value):null,partial_fraction:m==='partial'?Number($('partialFraction').value):null};
+ try{
+  loading=true;$('addBtn').disabled=true;const r=await db.from('kmb_stocktake_entries').insert(row);if(r.error)throw r.error;
+  await loadEntries();$('product').value='';$('size').value='';$('note').value='';$('unitCost').value='';
+  $('looseQty').value='1';$('caseQty').value='1';$('partialQty').value='1';renderMode();
+  flash($('addMessage'),'✓ Added '+qty(quantity)+' '+name+'. Running total updated.',false);$('product').focus();
+ }catch(e){flash($('addMessage'),failText(e),true)}
+ finally{loading=false;$('addBtn').disabled=false}
+}
+async function removeEntry(id){
+ const item=entries.find(e=>e.id===id);if(!item||!isOpen())return;
+ if(!confirm('Remove '+qty(item.quantity)+' '+item.product_name+' from this stocktake?'))return;
+ const r=await db.from('kmb_stocktake_entries').delete().eq('id',id).eq('session_id',selected);
+ if(r.error){alert(failText(r.error));return}await loadEntries();
+}
+async function complete(){
+ if(!isOpen())return;
+ if(!confirm('Finish this stocktake? Its count will be saved as a dated snapshot and cannot be edited afterwards.'))return;
+ const r=await db.from('kmb_stocktake_sessions').update({status:'completed',completed_at:new Date().toISOString()}).eq('id',selected);
+ if(r.error){alert(failText(r.error));return}await loadSessions(selected);
+}
+function downloadCSV(){
+ const s=selectedSession();if(!s)return;
+ const rows=[['Stocktake date','Stocktake name','Category','Drink','Size','Bottle/can equivalents','Known stock value GBP','Unpriced quantities','Value complete']];
+ for(const g of groupEntries())rows.push([s.taken_on,s.label,g.category,g.name,g.size,g.quantity,g.known.toFixed(2),g.unpriced,g.unpriced===0?'Yes':'No']);
+ const csv=rows.map(c=>c.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
+ const blob=new Blob(['\ufeff',csv],{type:'text/csv;charset=utf-8'}),link=document.createElement('a'),u=window.URL.createObjectURL(blob);
+ link.href=u;link.download='KMB-Stocktake-'+s.taken_on+'.csv';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>window.URL.revokeObjectURL(u),1000);
+}
+$('newBtn').onclick=()=>{$('newBox').classList.toggle('hidden');$('newDate').value=currentDate();$('newMessage').textContent=''};
+$('saveSessionBtn').onclick=createSession;
+$('sessionSelect').onchange=async e=>{selected=e.target.value||null;try{await loadEntries()}catch(x){alert(failText(x))}};
+$('addForm').addEventListener('submit',addEntry);
+document.querySelectorAll('input[name="mode"]').forEach(el=>el.addEventListener('change',renderMode));
+['looseQty','caseQty','perCase','partialQty','partialFraction'].forEach(id=>$(id).addEventListener('input',renderMode));
+$('entries').addEventListener('click',e=>{const btn=e.target.closest('[data-remove]');if(btn)removeEntry(btn.dataset.remove)});
+$('completeBtn').onclick=complete;$('exportBtn').onclick=downloadCSV;
+renderMode();init();
+})();
+</script>
+</body>
+</html>
