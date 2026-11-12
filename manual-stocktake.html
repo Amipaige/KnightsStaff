@@ -69,6 +69,7 @@ button:disabled{opacity:.55;cursor:not-allowed}.primary{background:var(--accent)
       <h2>Add to your count</h2><p class="muted">Found another crate? Enter it here. If you've counted the same drink before, it adds to the total.</p>
       <form id="addForm">
         <div class="form-grid">
+          <div class="field full"><label for="existingProduct">Previously added drinks — quick select</label><select id="existingProduct"><option value="">Choose an existing item, or type a new one below</option></select><p class="tiny">Selecting a saved drink fills in its size, category and latest recorded purchase cost.</p></div>
           <div class="field"><label for="category">Category</label><select id="category"><option>Beer &amp; ale</option><option>Cider</option><option>Spirits</option><option>Wine &amp; prosecco</option><option>Soft drinks</option><option>Mixers</option><option>Other</option></select></div>
           <div class="field"><label for="product">Drink / brand</label><input id="product" required maxlength="140" list="productOptions" placeholder="e.g. Birra Moretti"><datalist id="productOptions"></datalist></div>
           <div class="field"><label for="size">Bottle / can size</label><input id="size" maxlength="30" placeholder="e.g. 330ml, 70cl"></div>
@@ -86,7 +87,7 @@ button:disabled{opacity:.55;cursor:not-allowed}.primary{background:var(--accent)
             <div class="field"><label for="partialQty">Opened bottles</label><input id="partialQty" type="number" min="1" step="1" value="1"></div>
             <div class="field"><label for="partialFraction">Amount left in each</label><select id="partialFraction"><option value="0.1">10% left</option><option value="0.25">¼ bottle</option><option value="0.5" selected>½ bottle</option><option value="0.75">¾ bottle</option><option value="0.9">90% left</option></select></div>
           </div></div>
-          <div class="field"><label for="unitCost">Purchase cost per full bottle / can (£)</label><input id="unitCost" type="number" min="0" step="0.01" placeholder="Optional"></div>
+          <div class="field"><label for="unitCost">Purchase cost per full bottle / can (£)</label><input id="unitCost" type="number" min="0" step="0.01" placeholder="Optional"><p class="tiny" id="costHint">New drinks need a purchase cost; saved ones fill the most recent recorded price automatically.</p></div>
           <div class="field full"><label for="note">Notes / crate number</label><input id="note" maxlength="200" placeholder="Optional, e.g. Crate 4"></div>
         </div>
         <div style="margin-top:15px" class="flex"><button id="addBtn" class="primary" type="submit">+ Add to stocktake</button><span id="calcPreview" class="tiny"></span></div>
@@ -116,7 +117,39 @@ const qty=v=>Number(v).toLocaleString('en-GB',{maximumFractionDigits:3});
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const currentDate=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const niceDate=v=>v?new Date(v+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'';
-let sessions=[],entries=[],selected=null,loading=false;
+let sessions=[],entries=[],catalog=[],selected=null,loading=false;
+const norm=v=>String(v||'').trim().replace(/\s+/g,' ').toLowerCase();
+const catalogKey=e=>[norm(e.category),norm(e.product_name),norm(e.size_label)].join('|');
+function drawCatalog(){
+ const select=$('existingProduct'),current=select.value;
+ select.innerHTML='<option value="">Choose an existing item, or type a new one below</option>'+catalog.map((p,i)=>'<option value="'+i+'">'+esc(p.product_name+' · '+(p.size_label||'size unspecified')+' · '+p.category+' · '+(p.unit_cost===null?'no saved price':gbp(p.unit_cost)))+'</option>').join('');
+ if(current!==''&&catalog[Number(current)])select.value=current;
+ $('productOptions').innerHTML=[...new Set(catalog.map(p=>p.product_name))].map(x=>'<option value="'+esc(x)+'"></option>').join('');
+}
+function fillSavedProduct(p){
+ if(!p)return;
+ $('product').value=p.product_name;$('size').value=p.size_label||'';$('category').value=p.category;
+ $('unitCost').value=p.unit_cost===null?'':Number(p.unit_cost).toFixed(2);
+ $('costHint').textContent=p.unit_cost===null?'No saved cost for this item. Enter your purchase cost when known.':'Last recorded purchase cost: '+gbp(p.unit_cost)+' per full bottle/can. Change if your invoice price differs.';
+}
+function matchSavedProduct(){
+ const name=norm($('product').value),size=norm($('size').value);
+ if(!name){$('existingProduct').value='';return}
+ let found=catalog.filter(p=>norm(p.product_name)===name);
+ if(size)found=found.filter(p=>norm(p.size_label)===size);
+ if(found.length>1)found=found.filter(p=>norm(p.category)===norm($('category').value));
+ if(found.length===1){const p=found[0];$('existingProduct').value=String(catalog.indexOf(p));fillSavedProduct(p)}
+ else{$('existingProduct').value='';$('unitCost').value='';$('costHint').textContent=found.length?'More than one size matches. Pick the correct item above.':'New item — enter its purchase cost, if known.'}
+}
+async function loadCatalog(){
+ const map=new Map();let offset=0,part;
+ do{const r=await db.from('kmb_stocktake_entries').select('product_name,size_label,category,unit_cost,created_at').order('created_at',{ascending:false}).range(offset,offset+499);if(r.error)throw r.error;part=r.data||[];
+ for(const p of part){const k=catalogKey(p);if(!map.has(k))map.set(k,{product_name:p.product_name,size_label:p.size_label||'',category:p.category,unit_cost:p.unit_cost});else if(map.get(k).unit_cost===null&&p.unit_cost!==null)map.get(k).unit_cost=p.unit_cost}
+ offset+=part.length;
+ }while(part.length===500);
+ catalog=[...map.values()].sort((a,b)=>a.product_name.localeCompare(b.product_name)||a.size_label.localeCompare(b.size_label));
+ drawCatalog();
+}
 function flash(el,message,failed){el.textContent=message;el.className='message '+(failed?'err':'ok')}
 function failText(e){return e&&e.message?e.message:String(e)}
 function selectedSession(){return sessions.find(s=>s.id===selected)}
@@ -139,7 +172,7 @@ async function init(){
   const {data,error}=await db.auth.getUser();if(error||!data?.user)throw new Error('Please sign in to KMB.Hub first, then reopen Stock.');
   const r=await db.from('staff_profiles').select('role').eq('id',data.user.id).maybeSingle();
   if(r.error||r.data?.role!=='admin')throw new Error('Stocktakes are available to Hub administrators only.');
-  $('gate').classList.add('hidden');$('app').classList.remove('hidden');await loadSessions();
+  $('gate').classList.add('hidden');$('app').classList.remove('hidden');await loadCatalog();await loadSessions();
  }catch(e){$('gate').textContent=failText(e)}
 }
 async function loadSessions(preferred){
@@ -190,7 +223,6 @@ function render(){
   detail+=' = '+qty(e.quantity)+' equivalent'+(Number(e.quantity)===1?'':'s');
   return '<div class="entry"><div><b>'+esc(e.product_name)+' <span class="tiny">'+esc(e.size_label||'')+'</span></b><small>'+esc(e.category)+' · '+esc(detail)+(e.note?' · '+esc(e.note):'')+'</small><small>'+ (e.unit_cost===null?'Cost not entered':gbp(Number(e.unit_cost)*Number(e.quantity))+' at '+gbp(e.unit_cost)+' each') +'</small></div>'+(isOpen()?'<button class="danger" type="button" data-remove="'+esc(e.id)+'" aria-label="Remove this count">Remove</button>':'')+'</div>'
  }).join(''):'<p class="muted">Nothing added yet.</p>';
- const options=new Set(entries.map(e=>e.product_name));$('productOptions').innerHTML=[...options].map(x=>'<option value="'+esc(x)+'"></option>').join('');
 }
 async function createSession(){
  if(loading)return;
@@ -220,7 +252,7 @@ async function addEntry(event){
   partial_bottles:m==='partial'?Number($('partialQty').value):null,partial_fraction:m==='partial'?Number($('partialFraction').value):null};
  try{
   loading=true;$('addBtn').disabled=true;const r=await db.from('kmb_stocktake_entries').insert(row);if(r.error)throw r.error;
-  await loadEntries();$('product').value='';$('size').value='';$('note').value='';$('unitCost').value='';
+  await loadCatalog();await loadEntries();$('product').value='';$('size').value='';$('note').value='';$('unitCost').value='';$('existingProduct').value='';$('costHint').textContent='New drinks need a purchase cost; saved ones fill the most recent recorded price automatically.';
   $('looseQty').value='1';$('caseQty').value='1';$('partialQty').value='1';renderMode();
   flash($('addMessage'),'✓ Added '+qty(quantity)+' '+name+'. Running total updated.',false);$('product').focus();
  }catch(e){flash($('addMessage'),failText(e),true)}
@@ -230,7 +262,7 @@ async function removeEntry(id){
  const item=entries.find(e=>e.id===id);if(!item||!isOpen())return;
  if(!confirm('Remove '+qty(item.quantity)+' '+item.product_name+' from this stocktake?'))return;
  const r=await db.from('kmb_stocktake_entries').delete().eq('id',id).eq('session_id',selected);
- if(r.error){alert(failText(r.error));return}await loadEntries();
+ if(r.error){alert(failText(r.error));return}await loadCatalog();await loadEntries();
 }
 async function complete(){
  if(!isOpen())return;
@@ -250,6 +282,11 @@ $('newBtn').onclick=()=>{$('newBox').classList.toggle('hidden');$('newDate').val
 $('saveSessionBtn').onclick=createSession;
 $('sessionSelect').onchange=async e=>{selected=e.target.value||null;try{await loadEntries()}catch(x){alert(failText(x))}};
 $('addForm').addEventListener('submit',addEntry);
+$('existingProduct').addEventListener('change',e=>{if(e.target.value!=='')fillSavedProduct(catalog[Number(e.target.value)])});
+$('product').addEventListener('change',matchSavedProduct);
+$('size').addEventListener('change',matchSavedProduct);
+$('category').addEventListener('change',matchSavedProduct);
+$('unitCost').addEventListener('input',()=>{$('costHint').textContent='Using your entered cost. It will be offered as the latest saved price next time.';});
 document.querySelectorAll('input[name="mode"]').forEach(el=>el.addEventListener('change',renderMode));
 ['looseQty','caseQty','perCase','partialQty','partialFraction'].forEach(id=>$(id).addEventListener('input',renderMode));
 $('entries').addEventListener('click',e=>{const btn=e.target.closest('[data-remove]');if(btn)removeEntry(btn.dataset.remove)});
