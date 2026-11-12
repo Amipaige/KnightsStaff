@@ -36,7 +36,6 @@ details{margin-top:13px}summary{cursor:pointer;color:var(--purple);font-size:13p
  <label for="sessionSelect">Choose a saved date</label>
  <select id="sessionSelect"><option value="">No stocktakes yet</option></select>
  <div id="sessionMsg" class="message" role="status"></div>
- <details><summary>Backup &amp; exports</summary><p class="notice">Save a full copy of all your dated stocktakes and individual counts to your device.</p><button id="backupAllBtn" type="button" class="outline">Download full stock history</button></details>
 </section>
 <div id="active" class="hidden">
 <section class="card">
@@ -220,17 +219,6 @@ function currentCSV(){
  groups().forEach(x=>rows.push([s.taken_on,x.name,x.size,x.category,Number(x.quantity.toFixed(3)),Number(x.value.toFixed(2)),Number(x.unpriced.toFixed(3))]));
  csvDownload(rows,'KMB-stocktake-'+s.taken_on+'.csv');
 }
-async function fullBackup(){
- try{
- $('backupAllBtn').disabled=true;
- let all=[],offset=0,part=[];
- do{const r=await db.from('kmb_stocktake_entries').select('*').order('created_at',{ascending:false}).order('id',{ascending:false}).range(offset,offset+499);if(r.error)throw r.error;part=r.data||[];all.push(...part);offset+=part.length}while(part.length===500);
- const data={exported_at:new Date().toISOString(),stocktakes:sessions,entries:all};
- saveBlob(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),'KMB-all-stocktakes-'+isoToday()+'.json');
- notice('sessionMsg','Full stock history downloaded to your device.');
- }catch(e){notice('sessionMsg','Backup failed: '+errorText(e),true)}
- finally{$('backupAllBtn').disabled=false}
-}
 async function init(){
  try{
  if(!window.supabase)throw Error('Cannot load database connection. Check your internet.');
@@ -247,7 +235,7 @@ $('sessionSelect').onchange=async e=>{selected=e.target.value;try{await loadEntr
 $('productSelect').onchange=setDrink;
 $('count').oninput=updatePreview;$('perCase').oninput=updatePreview;$('countKind').onchange=updatePreview;
 $('addForm').onsubmit=add;$('saveBtn').onclick=save;$('search').oninput=render;
-$('downloadBtn').onclick=currentCSV;$('backupAllBtn').onclick=fullBackup;
+$('downloadBtn').onclick=currentCSV;
 $('recentEntries').onclick=e=>{const b=e.target.closest('[data-remove]');if(b)remove(b.dataset.remove)};
 $('cost').oninput=()=>{$('costHint').textContent='This purchase cost will be saved for this count and suggested next time.'};
 if(window.parent!==window && typeof ResizeObserver==='function'){
