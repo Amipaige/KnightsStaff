@@ -53,14 +53,18 @@ details{margin-top:13px}summary{cursor:pointer;color:var(--purple);font-size:13p
    <div><label for="productSelect">Drink</label><select id="productSelect"><option value="">Select a drink</option></select></div>
    <div id="newProduct" class="grid hidden">
     <div class="span"><label for="name">Drink name</label><input id="name" maxlength="140" placeholder="e.g. Birra Moretti"></div>
-    <div><label for="size">Bottle / can size</label><input id="size" maxlength="30" placeholder="330ml"></div>
+    <div><label for="packageType">Stock format</label><select id="packageType"><option value="bottle">Bottle / can</option><option value="keg">Keg (draught)</option></select></div>
+    <div id="bottleSizeField"><label for="size">Bottle / can size</label><input id="size" maxlength="30" placeholder="330ml"></div>
+    <div id="kegCapacityField" class="hidden"><label for="kegCapacity">Keg size (litres)</label><input id="kegCapacity" type="number" min="1" max="200" step="0.5" value="50" inputmode="decimal"></div>
     <div><label for="category">Category</label><select id="category"><option>Beer &amp; ale</option><option>Cider</option><option>Spirits</option><option>Wine &amp; prosecco</option><option>Soft drinks</option><option>Mixers</option><option>Other</option></select></div>
    </div>
    <div class="grid">
-    <div><label for="count">Quantity</label><input id="count" type="number" min="1" step="1" inputmode="numeric" value="1" required></div>
-    <div><label for="countKind">Counting</label><select id="countKind"><option value="loose">Loose bottles / cans</option><option value="case">Sealed cases</option><option value="half">Half bottles</option><option value="quarter">Quarter bottles</option><option value="threequarter">¾ bottles</option></select></div>
+    <div><label for="count" id="countLabel">Quantity</label><input id="count" type="number" min="1" step="1" inputmode="numeric" value="1" required></div>
+    <div id="bottleModeField"><label for="countKind">Counting</label><select id="countKind"><option value="loose">Loose bottles / cans</option><option value="case">Sealed cases</option><option value="half">Half bottles</option><option value="quarter">Quarter bottles</option><option value="threequarter">¾ bottles</option></select></div>
     <div id="caseField" class="span hidden"><label for="perCase">Bottles / cans per case</label><input id="perCase" type="number" step="1" min="1" value="24" inputmode="numeric"></div>
-    <div class="span"><label for="cost">Purchase cost per full bottle / can (£)</label><input id="cost" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Optional"><p id="costHint" class="notice">Choose an existing item to reuse its last recorded purchase cost.</p></div>
+    <div id="kegModeField" class="hidden"><label for="kegLevel">Amount left in each keg</label><select id="kegLevel"><option value="1">Full (100%)</option><option value="0.75">About ¾ full</option><option value="0.5">About ½ full</option><option value="0.25">About ¼ full</option><option value="litres">Enter remaining litres</option></select></div>
+    <div id="kegLitresField" class="span hidden"><label for="kegLitres">Litres remaining per keg</label><input id="kegLitres" type="number" min="0.1" step="0.1" inputmode="decimal" placeholder="e.g. 18"><p class="notice">Add kegs with different fill levels separately. Estimates are fine if exact litres aren't known.</p></div>
+    <div class="span"><label for="cost" id="costLabel">Purchase cost per full bottle / can (£)</label><input id="cost" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Optional"><p id="costHint" class="notice">Choose an existing item to reuse its last recorded purchase cost.</p></div>
    </div>
    <div class="hstack between"><button id="addBtn" type="submit" class="primary">+ Add to stock</button><span id="addPreview" class="small muted"></span></div>
   </div>
@@ -88,6 +92,8 @@ const gbp=x=>'£'+Number(x||0).toLocaleString('en-GB',{minimumFractionDigits:2,m
 const fmt=x=>Number(x||0).toLocaleString('en-GB',{maximumFractionDigits:3});
 const norm=x=>String(x||'').trim().replace(/\s+/g,' ').toLowerCase();
 const keyFor=x=>[norm(x.category),norm(x.product_name),norm(x.size_label)].join('|');
+const isKeg=x=>/\b(keg|keykeg|cask)\b/i.test(String(x?.size_label||''));
+const kegSize=x=>{const m=String(x?.size_label||'').match(/(\d+(?:\.\d+)?)\s*l(?:itres?)?\b/i);return m?Number(m[1]):null};
 const isoToday=()=>{const p=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',day:'2-digit',month:'2-digit',year:'numeric'}).formatToParts(new Date());const get=x=>p.find(y=>y.type===x)?.value;return get('year')+'-'+get('month')+'-'+get('day')};
 const dateNice=x=>x?new Date(x+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}):'';
 let sessions=[],entries=[],catalog=[],selected=null,busy=false,chosen='';
@@ -96,10 +102,35 @@ function errorText(e){return e?.message||String(e)}
 function session(){return sessions.find(x=>x.id===selected)}
 function editable(){return session()?.status==='open'}
 function mode(){return $('countKind').value}
-function qtyAdd(){const n=Number($('count').value);if(mode()==='case')return n*Number($('perCase').value);if(mode()==='half')return n*.5;if(mode()==='quarter')return n*.25;if(mode()==='threequarter')return n*.75;return n}
-function validCount(){const n=Number($('count').value),c=Number($('perCase').value);return Number.isSafeInteger(n)&&n>0&&n<100000&&(mode()!=='case'||(Number.isSafeInteger(c)&&c>0&&c<=1000&&n*c<100000))}
-function updatePreview(){$('caseField').classList.toggle('hidden',mode()!=='case');$('addPreview').textContent=validCount()?fmt(qtyAdd())+' bottle equivalents':''}
-function setDrink(){const value=$('productSelect').value;chosen=value;$('newProduct').classList.toggle('hidden',value!=='new');if(value==='new'){$('cost').value='';$('costHint').textContent='Enter the purchase cost if known. No live supplier prices are assumed.';return}if(value===''){$('cost').value='';$('costHint').textContent='Choose an existing item to reuse its last recorded purchase cost.';return}const p=catalog[Number(value)];if(!p)return;$('cost').value=p.unit_cost===null?'':Number(p.unit_cost).toFixed(2);$('costHint').textContent=p.unit_cost===null?'No saved cost for this drink yet. Enter when known.':'Last recorded cost: '+gbp(p.unit_cost)+' per full bottle/can. Change if it has changed.'}
+function selectedProduct(){const v=$('productSelect').value;return v===''||v==='new'?null:catalog[Number(v)]}
+function kegMode(){return $('productSelect').value==='new'?$('packageType').value==='keg':isKeg(selectedProduct())}
+function capacity(){return $('productSelect').value==='new'?Number($('kegCapacity').value):kegSize(selectedProduct())}
+function kegFraction(){return $('kegLevel').value==='litres'?Number($('kegLitres').value)/capacity():Number($('kegLevel').value)}
+function qtyAdd(){const n=Number($('count').value);if(kegMode())return n*kegFraction();if(mode()==='case')return n*Number($('perCase').value);if(mode()==='half')return n*.5;if(mode()==='quarter')return n*.25;if(mode()==='threequarter')return n*.75;return n}
+function validCount(){
+ const n=Number($('count').value),c=Number($('perCase').value);
+ if(!Number.isSafeInteger(n)||n<=0||n>=100000)return false;
+ if(kegMode()){const size=capacity(),fraction=kegFraction();return Number.isFinite(size)&&size>0&&size<=200&&Number.isFinite(fraction)&&fraction>0&&fraction<=1}
+ return mode()!=='case'||(Number.isSafeInteger(c)&&c>0&&c<=1000&&n*c<100000)
+}
+function updatePreview(){
+ const keg=kegMode(),fresh=$('productSelect').value==='new';
+ $('bottleSizeField').classList.toggle('hidden',!fresh||keg);$('kegCapacityField').classList.toggle('hidden',!fresh||!keg);
+ $('countLabel').textContent=keg?'Number of kegs':'Quantity';$('bottleModeField').classList.toggle('hidden',keg);
+ $('caseField').classList.toggle('hidden',keg||mode()!=='case');$('kegModeField').classList.toggle('hidden',!keg);
+ $('kegLitresField').classList.toggle('hidden',!keg||$('kegLevel').value!=='litres');
+ $('costLabel').textContent=keg?'Purchase cost per full keg (£)':'Purchase cost per full bottle / can (£)';
+ $('addPreview').textContent=validCount()?fmt(qtyAdd())+(keg?' keg equivalents · approx '+fmt(qtyAdd()*capacity())+' litres':' bottle equivalents'):'';
+}
+function setDrink(){
+ const v=$('productSelect').value;chosen=v;$('newProduct').classList.toggle('hidden',v!=='new');
+ if(v==='new'){$('cost').value='';$('costHint').textContent='Enter the purchase cost if known. Keg costs should exclude refundable keg deposits.';updatePreview();return}
+ if(v===''){$('cost').value='';$('costHint').textContent='Choose an existing item to reuse its last recorded purchase cost.';updatePreview();return}
+ const p=catalog[Number(v)];if(!p)return;
+ $('cost').value=p.unit_cost===null?'':Number(p.unit_cost).toFixed(2);
+ $('costHint').textContent=p.unit_cost===null?'No saved cost for this drink yet. Enter when known.':'Last recorded cost: '+gbp(p.unit_cost)+' per full '+(isKeg(p)?'keg':'bottle/can')+'. Change if it has changed.';
+ updatePreview();
+}
 function drawCatalog(){
  const previous=$('productSelect').value;
  $('productSelect').innerHTML='<option value="">Select a drink</option>'+catalog.map((p,i)=>'<option value="'+i+'">'+esc(p.product_name+' · '+(p.size_label||'size not recorded')+(p.unit_cost===null?'':' · '+gbp(p.unit_cost)))+'</option>').join('')+'<option value="new">+ New drink</option>';
@@ -143,18 +174,22 @@ function groups(){
 }
 function render(){
  const s=session();if(!s)return;
- const list=groups(),value=list.reduce((a,x)=>a+x.value,0),unpriced=list.reduce((a,x)=>a+x.unpriced,0),bottles=list.reduce((a,x)=>a+x.quantity,0);
+ const list=groups(),value=list.reduce((a,x)=>a+x.value,0),unpriced=list.reduce((a,x)=>a+x.unpriced,0);
+ const bottles=list.filter(x=>!isKeg({size_label:x.size})).reduce((a,x)=>a+x.quantity,0);
+ const kegs=list.filter(x=>isKeg({size_label:x.size})),kegTotal=kegs.reduce((a,x)=>a+x.quantity,0);
+ const litres=kegs.reduce((a,x)=>a+x.quantity*(kegSize({size_label:x.size})||0),0);
+ const unpricedKegs=kegs.reduce((a,x)=>a+x.unpriced,0),unpricedBottles=unpriced-unpricedKegs;
  $('dated').textContent=dateNice(s.taken_on);
  $('value').textContent=gbp(value);$('bottomValue').textContent=gbp(value);
- $('stats').textContent=list.length+' products · '+fmt(bottles)+' bottle equivalents';
+ $('stats').textContent=list.length+' products · '+fmt(bottles)+' bottle/can equivalents'+(kegs.length?' · '+fmt(kegTotal)+' keg equivalents ('+fmt(litres)+'L draught)':'');
  $('productCount').textContent=list.length+' products';
- $('valueNote').textContent=unpriced?'Value is incomplete: '+fmt(unpriced)+' bottle equivalents have no recorded purchase cost.':'Value is based on recorded purchase costs, not retail selling prices.';
+ $('valueNote').textContent=unpriced?'Value is incomplete: '+[unpricedBottles?fmt(unpricedBottles)+' bottle/can equivalents':null,unpricedKegs?fmt(unpricedKegs)+' keg equivalents':null].filter(Boolean).join(' and ')+' have no recorded purchase cost.':'Value is based on recorded purchase costs, not retail selling prices.';
  $('entryPanel').classList.toggle('hidden',!editable());$('saveBtn').classList.toggle('hidden',!editable());
  $('savedNote').textContent=editable()?'Counts save as you add them. Press Save stocktake when finished.':'✓ Stocktake saved for '+dateNice(s.taken_on);
  $('savedNote').className='message '+(editable()?'':'success');
  const q=norm($('search').value),visible=list.filter(x=>norm(x.name+' '+x.size+' '+x.category).includes(q));
- $('stockList').innerHTML=visible.length?visible.map(x=>'<div class="row"><div><div class="rowname">'+esc(x.name)+'</div><div class="meta">'+esc(x.size||'Size unspecified')+' · '+esc(x.category)+'</div></div><div class="number"><div class="qty">'+fmt(x.quantity)+' bottles</div><div class="sub">'+(x.unpriced?'Incomplete cost':gbp(x.value))+'</div></div></div>').join(''):'<p class="muted small">No matching drinks found.</p>';
- $('recentEntries').innerHTML=entries.length?entries.map(x=>'<div class="row"><div><div class="rowname">'+esc(x.product_name)+'</div><div class="meta">'+fmt(x.quantity)+' equivalents'+(x.note?' · '+esc(x.note):'')+'</div></div>'+(editable()?'<button type="button" class="mini light" data-remove="'+esc(x.id)+'">Remove</button>':'')+'</div>').join(''):'<p class="muted small">No counts added yet.</p>';
+ $('stockList').innerHTML=visible.length?visible.map(x=>'<div class="row"><div><div class="rowname">'+esc(x.name)+'</div><div class="meta">'+esc(x.size||'Size unspecified')+' · '+esc(x.category)+'</div></div><div class="number"><div class="qty">'+(isKeg({size_label:x.size})?fmt(x.quantity)+' keg equivalents · '+fmt(x.quantity*(kegSize({size_label:x.size})||0))+'L':fmt(x.quantity)+' bottles/cans')+'</div><div class="sub">'+(x.unpriced?'Incomplete cost':gbp(x.value))+'</div></div></div>').join(''):'<p class="muted small">No matching drinks found.</p>';
+ $('recentEntries').innerHTML=entries.length?entries.map(x=>'<div class="row"><div><div class="rowname">'+esc(x.product_name)+'</div><div class="meta">'+fmt(x.quantity)+(isKeg(x)?' keg equivalents':' bottle equivalents')+(x.note?' · '+esc(x.note):'')+'</div></div>'+(editable()?'<button type="button" class="mini light" data-remove="'+esc(x.id)+'">Remove</button>':'')+'</div>').join(''):'<p class="muted small">No counts added yet.</p>';
 }
 async function createNew(){
  if(busy)return;
@@ -168,27 +203,28 @@ async function createNew(){
 }
 async function add(event){
  event.preventDefault();if(busy||!editable())return;
- if(!validCount()){notice('addMsg','Enter a valid number of bottles or cases.',true);return}
+ if(!validCount()){notice('addMsg','Check the quantity and fill level. Remaining keg litres must be above zero and no more than full capacity.',true);return}
  const p=$('productSelect').value;
  if(p===''){notice('addMsg','Choose a drink first.',true);return}
  const name=p==='new'?$('name').value.trim().replace(/\s+/g,' '):catalog[Number(p)]?.product_name;
- const size=p==='new'?$('size').value.trim():catalog[Number(p)]?.size_label;
+ const keg=kegMode(),size=p==='new'?(keg?fmt(capacity())+'L keg':$('size').value.trim()):catalog[Number(p)]?.size_label;
  const category=p==='new'?$('category').value:catalog[Number(p)]?.category;
  const costText=$('cost').value.trim(),cost=costText===''?null:Number(costText);
  if(!name){notice('addMsg','Enter the drink name.',true);return}
  if(cost!==null&&(!Number.isFinite(cost)||cost<0||cost>100000)){notice('addMsg','Check the purchase cost.',true);return}
- const m=mode(),fraction={half:.5,quarter:.25,threequarter:.75}[m]||null;
- const row={session_id:selected,product_name:name,size_label:size||'',category,entry_type:m==='case'?'case':fraction?'partial':'loose',
- quantity:qtyAdd(),unit_cost:cost,note:'',cases_count:m==='case'?Number($('count').value):null,units_per_case:m==='case'?Number($('perCase').value):null,
+ const m=mode(),fraction=keg?(kegFraction()<1?kegFraction():null):({half:.5,quarter:.25,threequarter:.75}[m]||null);
+ const kegNote=keg?'Keg · '+fmt(Number($('count').value))+' × '+($('kegLevel').value==='litres'?fmt(Number($('kegLitres').value))+'L remaining':fmt(kegFraction()*100)+'% full')+' · '+fmt(capacity())+'L full capacity':'';
+ const row={session_id:selected,product_name:name,size_label:size||'',category,entry_type:!keg&&m==='case'?'case':fraction?'partial':'loose',
+ quantity:qtyAdd(),unit_cost:cost,note:kegNote,cases_count:!keg&&m==='case'?Number($('count').value):null,units_per_case:!keg&&m==='case'?Number($('perCase').value):null,
  partial_bottles:fraction?Number($('count').value):null,partial_fraction:fraction};
  try{
  busy=true;$('addBtn').disabled=true;
  const r=await db.from('kmb_stocktake_entries').insert(row);if(r.error)throw r.error;
  await loadCatalog();await loadEntries();
- $('count').value='1';$('countKind').value='loose';updatePreview();
+ $('count').value='1';$('countKind').value='loose';$('kegLevel').value='1';$('kegLitres').value='';updatePreview();
  const found=catalog.findIndex(x=>keyFor(x)===keyFor(row));
  $('productSelect').value=found>=0?String(found):'new';setDrink();
- $('name').value='';$('size').value='';notice('addMsg','✓ Added '+fmt(row.quantity)+' '+name+'. Totals updated.');
+ $('name').value='';$('size').value='';notice('addMsg','✓ Added '+fmt(row.quantity)+(keg?' keg equivalents':' bottle equivalents')+' of '+name+'. Totals updated.');
  }catch(e){notice('addMsg',errorText(e),true)}
  finally{busy=false;$('addBtn').disabled=false}
 }
@@ -215,8 +251,8 @@ function csvDownload(rows,name){
 function saveBlob(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 function currentCSV(){
  const s=session();if(!s)return;
- const rows=[['Date','Drink','Size','Category','Bottle equivalents','Known purchase cost GBP','Unpriced equivalents']];
- groups().forEach(x=>rows.push([s.taken_on,x.name,x.size,x.category,Number(x.quantity.toFixed(3)),Number(x.value.toFixed(2)),Number(x.unpriced.toFixed(3))]));
+ const rows=[['Date','Drink','Size','Category','Unit type','Full unit equivalents','Estimated draught litres','Known purchase value GBP','Unpriced equivalents']];
+ groups().forEach(x=>{const keg=isKeg({size_label:x.size});rows.push([s.taken_on,x.name,x.size,x.category,keg?'Keg':'Bottle / can',Number(x.quantity.toFixed(3)),keg?Number((x.quantity*(kegSize({size_label:x.size})||0)).toFixed(2)):'',Number(x.value.toFixed(2)),Number(x.unpriced.toFixed(3))])});
  csvDownload(rows,'KMB-stocktake-'+s.taken_on+'.csv');
 }
 async function init(){
@@ -234,6 +270,7 @@ $('newBtn').onclick=createNew;
 $('sessionSelect').onchange=async e=>{selected=e.target.value;try{await loadEntries()}catch(x){notice('sessionMsg',errorText(x),true)}};
 $('productSelect').onchange=setDrink;
 $('count').oninput=updatePreview;$('perCase').oninput=updatePreview;$('countKind').onchange=updatePreview;
+$('packageType').onchange=updatePreview;$('kegCapacity').oninput=updatePreview;$('kegLevel').onchange=updatePreview;$('kegLitres').oninput=updatePreview;
 $('addForm').onsubmit=add;$('saveBtn').onclick=save;$('search').oninput=render;
 $('downloadBtn').onclick=currentCSV;
 $('recentEntries').onclick=e=>{const b=e.target.closest('[data-remove]');if(b)remove(b.dataset.remove)};
