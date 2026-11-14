@@ -21,7 +21,7 @@ label{display:block;margin:0 0 6px;font-size:12px;font-weight:750}
 .value{font-size:31px;font-weight:760;letter-spacing:-.025em;margin:3px 0}.value-card{background:var(--wash);border-radius:13px;padding:16px}
 .notice{font-size:12px;color:var(--muted);margin:7px 0 0}.message{font-size:13px;font-weight:650;min-height:17px;margin-top:9px}.message.error{color:var(--red)}.message.success{color:#2d7752}
 .row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid var(--line)}
-.row:last-child{border-bottom:0}.rowname{font-weight:700;font-size:14px}.meta{font-size:12px;color:var(--muted);margin-top:3px}.number{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.row:last-child{border-bottom:0}.stock-row{flex-wrap:wrap}.stock-row .number{margin-left:auto}.entry-actions{display:flex;gap:7px;flex-wrap:wrap}.rowname{font-weight:700;font-size:14px}.meta{font-size:12px;color:var(--muted);margin-top:3px}.number{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .qty{font-weight:750}.sub{font-size:12px;color:var(--muted)}
 details{margin-top:13px}summary{cursor:pointer;color:var(--purple);font-size:13px;font-weight:750}.warn{background:#fff6e9;border:1px solid #ecdabb;padding:12px;border-radius:10px}
 #gate{padding:24px}#active .card:last-child{margin-bottom:0}
@@ -71,6 +71,23 @@ details{margin-top:13px}summary{cursor:pointer;color:var(--purple);font-size:13p
   <div id="addMsg" class="message" role="status"></div>
  </form>
 </section>
+<section id="editPanel" class="card hidden">
+ <div class="hstack between"><h2 style="margin:0">Edit stock item</h2><button type="button" class="mini light" id="editCancel">Cancel</button></div>
+ <p class="notice">Changes update the existing item without adding another count. Your other stock remains unchanged.</p>
+ <form id="editForm">
+  <div id="editEntryChoice" class="hidden" style="margin:12px 0"><label for="editEntrySelect">This item was added more than once — choose which count to edit</label><select id="editEntrySelect"></select></div>
+  <div class="grid" style="margin:14px 0">
+   <div class="span"><label for="editName">Drink name</label><input id="editName" maxlength="140" required></div>
+   <div><label for="editSize">Bottle / can size or keg size</label><input id="editSize" maxlength="30" placeholder="e.g. 70cl, 1L or 50L keg"></div>
+   <div><label for="editCategory">Category</label><select id="editCategory"><option>Beer &amp; ale</option><option>Cider</option><option>Spirits</option><option>Wine &amp; prosecco</option><option>Soft drinks</option><option>Mixers</option><option>Other</option></select></div>
+   <div><label id="editQtyLabel" for="editQuantity">Total bottles / cans (including partials)</label><input id="editQuantity" type="number" min="0.001" step="any" inputmode="decimal" required></div>
+   <div><label id="editPriceLabel" for="editCost">Purchase cost per full bottle / can (£)</label><input id="editCost" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Leave empty if unknown"></div>
+  </div>
+  <p id="editQtyHint" class="notice"></p>
+  <div class="hstack" style="margin-top:14px"><button id="editSave" type="submit" class="primary">Save changes</button><span class="small muted">The stock value recalculates automatically</span></div>
+  <div id="editMsg" class="message" role="status"></div>
+ </form>
+</section>
 <section class="card">
  <div class="hstack between"><h2 style="margin:0">Your stock</h2><span class="small muted" id="productCount"></span></div>
  <input id="search" type="search" placeholder="Search stock…" aria-label="Search stock" style="margin:12px 0 3px">
@@ -96,7 +113,7 @@ const isKeg=x=>/\b(keg|keykeg|cask)\b/i.test(String(x?.size_label||''));
 const kegSize=x=>{const m=String(x?.size_label||'').match(/(\d+(?:\.\d+)?)\s*l(?:itres?)?\b/i);return m?Number(m[1]):null};
 const isoToday=()=>{const p=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',day:'2-digit',month:'2-digit',year:'numeric'}).formatToParts(new Date());const get=x=>p.find(y=>y.type===x)?.value;return get('year')+'-'+get('month')+'-'+get('day')};
 const dateNice=x=>x?new Date(x+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}):'';
-let sessions=[],entries=[],catalog=[],selected=null,busy=false,chosen='';
+let sessions=[],entries=[],catalog=[],selected=null,busy=false,chosen='',editingId=null;
 function notice(id,msg,err=false){const el=$(id);el.textContent=msg;el.className='message '+(err?'error':'success')}
 function errorText(e){return e?.message||String(e)}
 function session(){return sessions.find(x=>x.id===selected)}
@@ -188,11 +205,75 @@ function render(){
  $('savedNote').textContent=editable()?'Counts save as you add them. Press Save stocktake when finished.':'✓ Stocktake saved for '+dateNice(s.taken_on);
  $('savedNote').className='message '+(editable()?'':'success');
  const q=norm($('search').value),visible=list.filter(x=>norm(x.name+' '+x.size+' '+x.category).includes(q));
- $('stockList').innerHTML=visible.length?visible.map(x=>'<div class="row"><div><div class="rowname">'+esc(x.name)+'</div><div class="meta">'+esc(x.size||'Size unspecified')+' · '+esc(x.category)+'</div></div><div class="number"><div class="qty">'+(isKeg({size_label:x.size})?fmt(x.quantity)+' keg equivalents · '+fmt(x.quantity*(kegSize({size_label:x.size})||0))+'L':fmt(x.quantity)+' bottles/cans')+'</div><div class="sub">'+(x.unpriced?'Incomplete cost':gbp(x.value))+'</div></div></div>').join(''):'<p class="muted small">No matching drinks found.</p>';
- $('recentEntries').innerHTML=entries.length?entries.map(x=>'<div class="row"><div><div class="rowname">'+esc(x.product_name)+'</div><div class="meta">'+fmt(x.quantity)+(isKeg(x)?' keg equivalents':' bottle equivalents')+(x.note?' · '+esc(x.note):'')+'</div></div>'+(editable()?'<button type="button" class="mini light" data-remove="'+esc(x.id)+'">Remove</button>':'')+'</div>').join(''):'<p class="muted small">No counts added yet.</p>';
+ $('stockList').innerHTML=visible.length?visible.map(x=>'<div class="row stock-row"><div><div class="rowname">'+esc(x.name)+'</div><div class="meta">'+esc(x.size||'Size unspecified')+' · '+esc(x.category)+'</div></div><div class="number"><div class="qty">'+(isKeg({size_label:x.size})?fmt(x.quantity)+' keg equivalents · '+fmt(x.quantity*(kegSize({size_label:x.size})||0))+'L':fmt(x.quantity)+' bottles/cans')+'</div><div class="sub">'+(x.unpriced?'Incomplete cost':gbp(x.value))+'</div></div>'+(editable()?'<button type="button" class="mini secondary" data-edit-group="'+esc(keyFor({category:x.category,product_name:x.name,size_label:x.size}))+'">Edit</button>':'')+'</div>').join(''):'<p class="muted small">No matching drinks found.</p>';
+ $('recentEntries').innerHTML=entries.length?entries.map(x=>'<div class="row"><div><div class="rowname">'+esc(x.product_name)+'</div><div class="meta">'+esc(x.size_label||'Size unspecified')+' · '+fmt(x.quantity)+(isKeg(x)?' keg equivalents':' bottle equivalents')+(x.note?' · '+esc(x.note):'')+'</div></div>'+(editable()?'<div class="entry-actions"><button type="button" class="mini secondary" data-edit-entry="'+esc(x.id)+'">Edit</button><button type="button" class="mini light" data-remove="'+esc(x.id)+'">Remove</button></div>':'')+'</div>').join(''):'<p class="muted small">No counts added yet.</p>';
+}
+function closeEditor(){
+ editingId=null;$('editPanel').classList.add('hidden');$('editMsg').textContent='';
+}
+function fillEditor(){
+ const e=entries.find(x=>x.id===$('editEntrySelect').value);
+ if(!e){closeEditor();return}
+ editingId=e.id;
+ $('editName').value=e.product_name||'';$('editSize').value=e.size_label||'';$('editCategory').value=e.category||'Other';
+ $('editQuantity').value=String(Number(e.quantity));
+ $('editCost').value=e.unit_cost===null?'':Number(e.unit_cost).toFixed(2);
+ $('editMsg').textContent='';
+ const keg=isKeg(e);
+ $('editQtyLabel').textContent=keg?'Quantity (full keg equivalents)':'Quantity (full bottle / can equivalents)';
+ $('editPriceLabel').textContent=keg?'Purchase cost per full keg (£)':'Purchase cost per full bottle / can (£)';
+ $('editQtyHint').textContent=keg?'For kegs: 1 = full keg, 0.5 = half a keg. Edit the size as “50L keg” or similar.': 'For bottles: 1 = one full bottle, 0.5 = half a bottle. Case totals appear as their bottle count.';
+}
+function openEditor(groupKey,preferredId){
+ if(!editable()||busy)return;
+ const matches=entries.filter(x=>keyFor(x)===groupKey);
+ if(!matches.length)return;
+ $('editEntryChoice').classList.toggle('hidden',matches.length===1);
+ $('editEntrySelect').innerHTML=matches.map((x,i)=>'<option value="'+esc(x.id)+'">Addition '+(i+1)+' · '+fmt(x.quantity)+' full-unit equivalents · '+(x.unit_cost===null?'No price entered':gbp(x.unit_cost)+' each')+(x.note?' · '+esc(x.note):'')+'</option>').join('');
+ const chosen=matches.some(x=>x.id===preferredId)?preferredId:matches[0].id;
+ $('editEntrySelect').value=chosen;
+ $('editPanel').classList.remove('hidden');fillEditor();
+ $('editPanel').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function buildEditPatch(e,values){
+ const name=String(values.name||'').trim().replace(/\s+/g,' '),size=String(values.size||'').trim();
+ const category=values.category,quantity=Number(values.qtyText),cost=values.costText===''?null:Number(values.costText);
+ if(!name||name.length>140)throw Error('Enter a drink name (up to 140 characters).');
+ if(size.length>30)throw Error('Size must be 30 characters or fewer.');
+ if(!['Beer & ale','Cider','Spirits','Wine & prosecco','Soft drinks','Mixers','Other'].includes(category))throw Error('Choose a valid category.');
+ if(values.qtyText===''||!Number.isFinite(quantity)||quantity<=0||quantity>100000)throw Error('Enter a valid quantity above zero.');
+ if(cost!==null&&(!Number.isFinite(cost)||cost<0||cost>100000))throw Error('Enter a valid purchase cost or leave it empty.');
+ const keg=isKeg({size_label:size});
+ if(keg&&!(kegSize({size_label:size})>0))throw Error('For kegs, include the full size (e.g. 50L keg).');
+ const patch={product_name:name,size_label:size,category,quantity,unit_cost:cost};
+ const adjusted=Math.abs(quantity-Number(e.quantity))>0.0000001 || (keg||isKeg(e))&&norm(size)!==norm(e.size_label);
+ if(adjusted){
+   // Original case/partial details no longer match a manually entered total.
+   patch.entry_type=Number.isInteger(quantity)?'loose':'partial';
+   patch.cases_count=null;patch.units_per_case=null;patch.partial_bottles=null;patch.partial_fraction=null;
+   patch.note='Manually edited: '+fmt(quantity)+(keg?' keg equivalents':' bottle/can equivalents');
+ }
+ return patch;
+}
+async function saveEdit(event){
+ event.preventDefault();if(!editable()||busy||!editingId)return;
+ const original=entries.find(e=>e.id===editingId);
+ if(!original){notice('editMsg','This entry is no longer available. Reopen it from the stock list.',true);return}
+ let patch;
+ try{patch=buildEditPatch(original,{name:$('editName').value,size:$('editSize').value,category:$('editCategory').value,qtyText:$('editQuantity').value.trim(),costText:$('editCost').value.trim()})}
+ catch(err){notice('editMsg',errorText(err),true);return}
+ try{
+  busy=true;$('editSave').disabled=true;
+  const result=await db.from('kmb_stocktake_entries').update(patch).eq('id',original.id).eq('session_id',selected).select('id').maybeSingle();
+  if(result.error)throw result.error;
+  if(!result.data)throw Error('The item was not updated. Reopen the stocktake and try again.');
+  await loadCatalog();await loadEntries();closeEditor();
+  notice('sessionMsg','✓ Updated '+patch.product_name+' ('+(patch.size_label||'size not recorded')+'). Stock value recalculated.');
+ }catch(err){notice('editMsg',errorText(err),true)}
+ finally{busy=false;$('editSave').disabled=false}
 }
 async function createNew(){
- if(busy)return;
+ if(busy)return;closeEditor();
  try{
  busy=true;$('newBtn').disabled=true;
  const r=await db.from('kmb_stocktake_sessions').insert({taken_on:isoToday(),label:'Stocktake'}).select('id').single();if(r.error)throw r.error;
@@ -230,6 +311,7 @@ async function add(event){
 }
 async function save(){
  if(!editable()||busy)return;
+ if(editingId){notice('editMsg','Save or cancel your item edit before completing the stocktake.',true);$('editPanel').scrollIntoView({behavior:'smooth',block:'start'});return}
  if(!entries.length&&!confirm('Save this empty stocktake?'))return;
  try{
  busy=true;$('saveBtn').disabled=true;
@@ -267,13 +349,15 @@ async function init(){
  }catch(e){$('gate').textContent=errorText(e)}
 }
 $('newBtn').onclick=createNew;
-$('sessionSelect').onchange=async e=>{selected=e.target.value;try{await loadEntries()}catch(x){notice('sessionMsg',errorText(x),true)}};
+$('sessionSelect').onchange=async e=>{if(busy)return;closeEditor();selected=e.target.value;try{await loadEntries()}catch(x){notice('sessionMsg',errorText(x),true)}};
 $('productSelect').onchange=setDrink;
 $('count').oninput=updatePreview;$('perCase').oninput=updatePreview;$('countKind').onchange=updatePreview;
 $('packageType').onchange=updatePreview;$('kegCapacity').oninput=updatePreview;$('kegLevel').onchange=updatePreview;$('kegLitres').oninput=updatePreview;
 $('addForm').onsubmit=add;$('saveBtn').onclick=save;$('search').oninput=render;
 $('downloadBtn').onclick=currentCSV;
-$('recentEntries').onclick=e=>{const b=e.target.closest('[data-remove]');if(b)remove(b.dataset.remove)};
+$('stockList').onclick=e=>{const b=e.target.closest('[data-edit-group]');if(b)openEditor(b.dataset.editGroup)};
+$('recentEntries').onclick=e=>{const edit=e.target.closest('[data-edit-entry]');if(edit){const item=entries.find(x=>x.id===edit.dataset.editEntry);if(item)openEditor(keyFor(item),item.id);return}const b=e.target.closest('[data-remove]');if(b)remove(b.dataset.remove)};
+$('editEntrySelect').onchange=fillEditor;$('editCancel').onclick=closeEditor;$('editForm').onsubmit=saveEdit;
 $('cost').oninput=()=>{$('costHint').textContent='This purchase cost will be saved for this count and suggested next time.'};
 if(window.parent!==window && typeof ResizeObserver==='function'){
  const sendHeight=()=>window.parent.postMessage({type:'kmb-stock-height',height:document.documentElement.scrollHeight},window.location.origin);
