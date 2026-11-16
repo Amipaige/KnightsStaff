@@ -74,6 +74,14 @@
           <article class="stat-card stat-link" data-jump="staffing" role="button" tabindex="0"><span>Staffing requests</span><strong id="statStaffRequests">0</strong></article>
           <article class="stat-card stat-link" data-jump="staffing" role="button" tabindex="0"><span>Events need staffing</span><strong id="statNeedStaff">0</strong></article>
         </div>
+        <article class="stat-card stat-link latest-stocktake-card" data-jump="stock" role="button" tabindex="0" aria-label="Open stocktake">
+          <div>
+            <span>Latest stocktake</span>
+            <div id="statStocktakeDate" class="small muted latest-stocktake-date">Checking stocktakes…</div>
+            <div id="statStocktakeStatus" class="small muted latest-stocktake-status"></div>
+          </div>
+          <strong id="statStocktakeValue">—</strong>
+        </article>
         <div class="two-col">
           <article class="panel">
             <div class="panel-head"><h2>This month’s events</h2><button class="link-btn" data-jump="calendar">Calendar</button></div>
