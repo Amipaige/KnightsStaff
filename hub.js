@@ -3,7 +3,7 @@ const URL='https://jpjrsndbjklecvwiuvbf.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwanJzbmRiamtsZWN2d2l1dmJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY1MzQ1MTQsImV4cCI6MjEwMjExMDUxNH0.KrNOCgc71pyc7vNgWdy9juQCz5PiEl0oIQ52QFv-9FE';
 const db=window.supabase.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const $=id=>document.getElementById(id);
-let me=null,profile=null,bookings=[],enquiries=[],payments=[],tasks=[],checklistItems=[],staffingEvents=[],staffingSignups=[],supportTickets=[],staffInformation=[],staffProfiles=[],teamAccountEmails=new Set(),calendarCursor=new Date(),liveRefreshBusy=false;
+let me=null,profile=null,bookings=[],enquiries=[],payments=[],tasks=[],checklistItems=[],staffingEvents=[],staffingSignups=[],supportTickets=[],staffInformation=[],staffProfiles=[],teamAccountEmails=new Set(),calendarCursor=new Date(),liveRefreshBusy=false,stocktakeSummaryRequest=null,stocktakeSummaryLoadedAt=0;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>'£'+Number(n||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
 const dmy=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
@@ -60,6 +60,45 @@ async function refreshBackupStatus(){
  const when=new Date(stamp).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
  el.textContent='Last Google backup: '+when;
 }
+function stocktakeKnownValue(rows){
+ return rows.reduce((total,row)=>row.unit_cost===null?total:total+Number(row.quantity||0)*Number(row.unit_cost||0),0);
+}
+async function refreshLatestStocktake(force=false){
+ if(profile?.role!=='admin')return;
+ if(stocktakeSummaryRequest)return stocktakeSummaryRequest;
+ if(!force&&Date.now()-stocktakeSummaryLoadedAt<60000)return;
+ stocktakeSummaryRequest=(async()=>{
+  const dateEl=$('statStocktakeDate'),statusEl=$('statStocktakeStatus'),valueEl=$('statStocktakeValue');
+  const latest=await db.from('kmb_stocktake_sessions').select('id,taken_on,status,created_at')
+   .order('taken_on',{ascending:false}).order('created_at',{ascending:false}).limit(1).maybeSingle();
+  if(latest.error)throw latest.error;
+  const stocktake=latest.data;
+  if(!stocktake){
+   dateEl.textContent='No stocktakes recorded yet';
+   statusEl.textContent='Open Stock to begin';
+   valueEl.textContent='—';stocktakeSummaryLoadedAt=Date.now();return;
+  }
+  let all=[],offset=0,part=[];
+  do{
+   const response=await db.from('kmb_stocktake_entries').select('quantity,unit_cost')
+    .eq('session_id',stocktake.id).range(offset,offset+499);
+   if(response.error)throw response.error;
+   part=response.data||[];all.push(...part);offset+=part.length;
+  }while(part.length===500);
+  const unpriced=all.filter(x=>x.unit_cost===null).length;
+  dateEl.textContent=dmy(stocktake.taken_on);
+  valueEl.textContent=money(stocktakeKnownValue(all));
+  statusEl.textContent=(stocktake.status==='completed'?'Completed':'In progress')+
+   (unpriced?' · '+unpriced+' unpriced '+(unpriced===1?'entry':'entries'):' · Purchase cost value');
+  stocktakeSummaryLoadedAt=Date.now();
+ })().catch(error=>{
+  console.warn('Latest stocktake summary:',error);
+  $('statStocktakeDate').textContent='Stocktake temporarily unavailable';
+  $('statStocktakeStatus').textContent='Open Stock to view details';
+  $('statStocktakeValue').textContent='—';
+ }).finally(()=>{stocktakeSummaryRequest=null});
+ return stocktakeSummaryRequest;
+}
 async function refreshLiveData(){
  if(profile?.role!=='admin'||liveRefreshBusy||document.hidden)return;
  liveRefreshBusy=true;
@@ -74,6 +113,7 @@ async function refreshLiveData(){
    for(const x of [b,e,p,t,c])if(x.error)throw x.error;
    bookings=b.data||[];enquiries=e.data||[];payments=p.data||[];tasks=t.data||[];checklistItems=c.data||[];
    await refreshStaffingSummary();
+   if(!$('dashboardView').classList.contains('hidden'))await refreshLatestStocktake();
    renderDashboard();renderEnquiries();renderBookings();renderCalendar();
    try{$('staffingFrame')?.contentWindow?.postMessage({type:'knights-refresh'},window.location.origin)}catch(_){}
  }catch(e){
@@ -163,7 +203,7 @@ function switchView(name){
    const frame=$('staffingFrame');
    try{frame?.contentWindow?.postMessage({type:'knights-show-shifts'},window.location.origin)}catch(_){}
  }
- if(name==='dashboard'&&profile?.role==='admin')Promise.all([refreshStaffingSummary(),refreshBackupStatus()]).then(renderDashboard).catch(e=>console.warn('Dashboard refresh:',e));
+ if(name==='dashboard'&&profile?.role==='admin')Promise.all([refreshStaffingSummary(),refreshBackupStatus(),refreshLatestStocktake(true)]).then(renderDashboard).catch(e=>console.warn('Dashboard refresh:',e));
  if(window.innerWidth<901)document.querySelector('.sidebar')?.classList.remove('open');
 }
 function staffingFilledCount(e){const ids=new Set(staffingSignups.filter(s=>s.event_id===e.id&&s.status==='confirmed').map(s=>s.staff_id).filter(Boolean));if(e.manager_id)ids.add(e.manager_id);return ids.size}
