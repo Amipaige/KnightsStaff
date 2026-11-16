@@ -21,7 +21,7 @@ label{display:block;margin:0 0 6px;font-size:12px;font-weight:750}
 .value{font-size:31px;font-weight:760;letter-spacing:-.025em;margin:3px 0}.value-card{background:var(--wash);border-radius:13px;padding:16px}
 .notice{font-size:12px;color:var(--muted);margin:7px 0 0}.message{font-size:13px;font-weight:650;min-height:17px;margin-top:9px}.message.error{color:var(--red)}.message.success{color:#2d7752}
 .row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid var(--line)}
-.row:last-child{border-bottom:0}.stock-row{flex-wrap:wrap}.stock-row .number{margin-left:auto}.entry-actions{display:flex;gap:7px;flex-wrap:wrap}.rowname{font-weight:700;font-size:14px}.meta{font-size:12px;color:var(--muted);margin-top:3px}.number{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.row:last-child{border-bottom:0}.stock-row{flex-wrap:wrap}.stock-row .number{margin-left:auto}.price-details{margin-top:6px;text-align:right;white-space:normal}.price-details summary{font-size:12px}.price-details form{background:#f7f5f8;border:1px solid var(--line);padding:12px;border-radius:10px;margin-top:8px;width:min(275px,calc(100vw - 62px));text-align:left}.price-details .price-actions{display:flex;align-items:center;gap:7px;margin-top:7px}.price-details .price-actions input{max-width:105px;flex:1}.price-details .price-actions button{white-space:nowrap}.price-details .notice{line-height:1.45}.entry-actions{display:flex;gap:7px;flex-wrap:wrap}.rowname{font-weight:700;font-size:14px}.meta{font-size:12px;color:var(--muted);margin-top:3px}.number{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .qty{font-weight:750}.sub{font-size:12px;color:var(--muted)}
 details{margin-top:13px}summary{cursor:pointer;color:var(--purple);font-size:13px;font-weight:750}.warn{background:#fff6e9;border:1px solid #ecdabb;padding:12px;border-radius:10px}
 #gate{padding:24px}#active .card:last-child{margin-bottom:0}
@@ -189,6 +189,19 @@ function groups(){
  for(const e of entries){const k=keyFor(e);if(!map.has(k))map.set(k,{category:e.category,name:e.product_name,size:e.size_label,quantity:0,value:0,unpriced:0});const g=map.get(k);g.quantity+=Number(e.quantity);if(e.unit_cost===null)g.unpriced+=Number(e.quantity);else g.value+=Number(e.quantity)*Number(e.unit_cost)}
  return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name)||String(a.size).localeCompare(String(b.size)));
 }
+function priceControl(g){
+ const groupKey=keyFor({category:g.category,product_name:g.name,size_label:g.size});
+ const matches=entries.filter(x=>keyFor(x)===groupKey);
+ const prices=[...new Set(matches.filter(e=>e.unit_cost!==null).map(e=>Number(e.unit_cost)))];
+ const unit=prices.length===1?prices[0].toFixed(2):'';
+ const keg=isKeg({size_label:g.size}),label=keg?'full keg':'full bottle / can';
+ return '<details class="price-details"><summary>Edit unit price</summary><form data-price-form="'+esc(groupKey)+'">'+
+  '<label>Purchase cost per '+label+' (£)</label>'+
+  '<div class="price-actions"><input data-price-input type="number" inputmode="decimal" min="0" max="100000" step="0.01" placeholder="£ per unit" value="'+esc(unit)+'" required>'+
+  '<button type="submit" class="mini primary">Save price</button></div>'+
+  '<p class="notice">Applies to all '+matches.length+' addition(s) of this exact drink and size. Quantities stay the same.</p>'+
+  '<div class="message" data-price-msg role="status"></div></form></details>';
+}
 function render(){
  const s=session();if(!s)return;
  const list=groups(),value=list.reduce((a,x)=>a+x.value,0),unpriced=list.reduce((a,x)=>a+x.unpriced,0);
@@ -205,7 +218,12 @@ function render(){
  $('savedNote').textContent=editable()?'Counts save as you add them. Press Save stocktake when finished.':'✓ Stocktake saved for '+dateNice(s.taken_on);
  $('savedNote').className='message '+(editable()?'':'success');
  const q=norm($('search').value),visible=list.filter(x=>norm(x.name+' '+x.size+' '+x.category).includes(q));
- $('stockList').innerHTML=visible.length?visible.map(x=>'<div class="row stock-row"><div><div class="rowname">'+esc(x.name)+'</div><div class="meta">'+esc(x.size||'Size unspecified')+' · '+esc(x.category)+'</div></div><div class="number"><div class="qty">'+(isKeg({size_label:x.size})?fmt(x.quantity)+' keg equivalents · '+fmt(x.quantity*(kegSize({size_label:x.size})||0))+'L':fmt(x.quantity)+' bottles/cans')+'</div><div class="sub">'+(x.unpriced?'Incomplete cost':gbp(x.value))+'</div></div>'+(editable()?'<button type="button" class="mini secondary" data-edit-group="'+esc(keyFor({category:x.category,product_name:x.name,size_label:x.size}))+'">Edit</button>':'')+'</div>').join(''):'<p class="muted small">No matching drinks found.</p>';
+ $('stockList').innerHTML=visible.length?visible.map(x=>
+  '<div class="row stock-row"><div><div class="rowname">'+esc(x.name)+'</div><div class="meta">'+esc(x.size||'Size unspecified')+' · '+esc(x.category)+'</div></div>'+
+  '<div class="number"><div class="qty">'+(isKeg({size_label:x.size})?fmt(x.quantity)+' keg equivalents · '+fmt(x.quantity*(kegSize({size_label:x.size})||0))+'L':fmt(x.quantity)+' bottles/cans')+'</div>'+
+  '<div class="sub">'+(x.unpriced?(x.unpriced<x.quantity?'Partly valued: '+gbp(x.value):'Incomplete cost'):gbp(x.value))+'</div>'+(editable()?priceControl(x):'')+'</div>'+
+  (editable()?'<button type="button" class="mini secondary" data-edit-group="'+esc(keyFor({category:x.category,product_name:x.name,size_label:x.size}))+'">Edit</button>':'')+'</div>'
+ ).join(''):'<p class="muted small">No matching drinks found.</p>';
  $('recentEntries').innerHTML=entries.length?entries.map(x=>'<div class="row"><div><div class="rowname">'+esc(x.product_name)+'</div><div class="meta">'+esc(x.size_label||'Size unspecified')+' · '+fmt(x.quantity)+(isKeg(x)?' keg equivalents':' bottle equivalents')+(x.note?' · '+esc(x.note):'')+'</div></div>'+(editable()?'<div class="entry-actions"><button type="button" class="mini secondary" data-edit-entry="'+esc(x.id)+'">Edit</button><button type="button" class="mini light" data-remove="'+esc(x.id)+'">Remove</button></div>':'')+'</div>').join(''):'<p class="muted small">No counts added yet.</p>';
 }
 function closeEditor(){
@@ -222,7 +240,7 @@ function fillEditor(){
  const keg=isKeg(e);
  $('editQtyLabel').textContent=keg?'Quantity (full keg equivalents)':'Quantity (full bottle / can equivalents)';
  $('editPriceLabel').textContent=keg?'Purchase cost per full keg (£)':'Purchase cost per full bottle / can (£)';
- $('editQtyHint').textContent=keg?'For kegs: 1 = full keg, 0.5 = half a keg. Edit the size as “50L keg” or similar.': 'For bottles: 1 = one full bottle, 0.5 = half a bottle. Case totals appear as their bottle count.';
+ $('editQtyHint').textContent=(keg?'For kegs: 1 = full keg, 0.5 = half a keg. Edit the size as “50L keg” or similar.':'For bottles: 1 = one full bottle, 0.5 = half a bottle. Case totals appear as their bottle count.')+' Changing only the unit price updates every matching addition of the same drink and size.';
 }
 function openEditor(groupKey,preferredId){
  if(!editable()||busy)return;
@@ -255,6 +273,27 @@ function buildEditPatch(e,values){
  }
  return patch;
 }
+async function saveGroupPrice(event){
+ event.preventDefault();if(!editable()||busy)return;
+ const form=event.target.closest('[data-price-form]');if(!form)return;
+ const groupKey=form.dataset.priceForm,matches=entries.filter(x=>keyFor(x)===groupKey);
+ const raw=form.querySelector('[data-price-input]').value.trim(),msg=form.querySelector('[data-price-msg]');
+ const price=Number(raw);
+ if(!matches.length||raw===''||!Number.isFinite(price)||price<0||price>100000){
+  msg.textContent='Enter a valid purchase cost per full item.';msg.className='message error';return;
+ }
+ const button=form.querySelector('button[type="submit"]');
+ try{
+  busy=true;button.disabled=true;
+  const ids=matches.map(x=>x.id);
+  const result=await db.from('kmb_stocktake_entries').update({unit_cost:price}).eq('session_id',selected).in('id',ids).select('id');
+  if(result.error)throw result.error;
+  if((result.data||[]).length!==ids.length)throw Error('Not all prices updated. Reload the stocktake to verify.');
+  await loadCatalog();await loadEntries();
+  notice('sessionMsg','✓ Purchase price saved for '+matches[0].product_name+' ('+(matches[0].size_label||'size not recorded')+') across '+ids.length+' addition(s).');
+ }catch(err){msg.textContent=errorText(err);msg.className='message error';button.disabled=false}
+ finally{busy=false}
+}
 async function saveEdit(event){
  event.preventDefault();if(!editable()||busy||!editingId)return;
  const original=entries.find(e=>e.id===editingId);
@@ -267,6 +306,13 @@ async function saveEdit(event){
   const result=await db.from('kmb_stocktake_entries').update(patch).eq('id',original.id).eq('session_id',selected).select('id').maybeSingle();
   if(result.error)throw result.error;
   if(!result.data)throw Error('The item was not updated. Reopen the stocktake and try again.');
+  const sameGroup=keyFor(patch)===keyFor(original);
+  const otherMatches=entries.filter(x=>x.id!==original.id&&keyFor(x)===keyFor(original));
+  if(sameGroup&&patch.unit_cost!==null&&patch.unit_cost!==original.unit_cost&&otherMatches.length){
+   const resultAll=await db.from('kmb_stocktake_entries').update({unit_cost:patch.unit_cost}).eq('session_id',selected).in('id',otherMatches.map(x=>x.id)).select('id');
+   if(resultAll.error)throw resultAll.error;
+   if((resultAll.data||[]).length!==otherMatches.length)throw Error('The price changed on one addition but not all. Please refresh and check.');
+  }
   await loadCatalog();await loadEntries();closeEditor();
   notice('sessionMsg','✓ Updated '+patch.product_name+' ('+(patch.size_label||'size not recorded')+'). Stock value recalculated.');
  }catch(err){notice('editMsg',errorText(err),true)}
@@ -356,6 +402,7 @@ $('packageType').onchange=updatePreview;$('kegCapacity').oninput=updatePreview;$
 $('addForm').onsubmit=add;$('saveBtn').onclick=save;$('search').oninput=render;
 $('downloadBtn').onclick=currentCSV;
 $('stockList').onclick=e=>{const b=e.target.closest('[data-edit-group]');if(b)openEditor(b.dataset.editGroup)};
+$('stockList').addEventListener('submit',saveGroupPrice);
 $('recentEntries').onclick=e=>{const edit=e.target.closest('[data-edit-entry]');if(edit){const item=entries.find(x=>x.id===edit.dataset.editEntry);if(item)openEditor(keyFor(item),item.id);return}const b=e.target.closest('[data-remove]');if(b)remove(b.dataset.remove)};
 $('editEntrySelect').onchange=fillEditor;$('editCancel').onclick=closeEditor;$('editForm').onsubmit=saveEdit;
 $('cost').oninput=()=>{$('costHint').textContent='This purchase cost will be saved for this count and suggested next time.'};
